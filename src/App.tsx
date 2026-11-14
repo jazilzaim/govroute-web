@@ -3,83 +3,74 @@ import {
   Home,
   Folder,
   ScanLine,
-  Settings,
-  Lock,
-  Shield,
+  Users,
   ArrowUpRight,
   Check,
   Search,
   QrCode,
   Wifi,
-  Battery,
-  ChevronRight,
-  RefreshCw,
+  Package,
+  Clock,
   X,
 } from 'lucide-react';
 
-type ScreenTab = 'HOME' | 'ASSETS' | 'SCAN' | 'SETTINGS';
+type ScreenTab = 'HOME' | 'INVENTORY' | 'SCAN' | 'TEAM';
 
 interface InventoryItem {
   id: string;
   name: string;
-  serial: string;
-  nsn: string;
-  category: 'Weapons' | 'Optics' | 'Fleet' | 'Comms';
-  status: 'In Vault' | 'Issued';
-  custodian: string;
-  timestamp: string;
+  tag: string;
+  category: 'Weapons & Optics' | 'Vehicles' | 'Radios' | 'Field Gear';
+  status: 'Available' | 'Checked Out';
+  assignedTo: string;
+  updatedAgo: string;
 }
 
 const INITIAL_ITEMS: InventoryItem[] = [
   {
     id: '1',
-    name: 'M4A1 SOPMOD Carbine',
-    serial: 'FN-994102',
-    nsn: '1005-01-561-7224',
-    category: 'Weapons',
-    status: 'In Vault',
-    custodian: 'Vault C · Rack 04',
-    timestamp: '2m ago',
+    name: 'M4A1 Patrol Carbine',
+    tag: 'TAG #4102',
+    category: 'Weapons & Optics',
+    status: 'Available',
+    assignedTo: 'Armory Rack A4',
+    updatedAgo: '2m ago',
   },
   {
     id: '2',
-    name: 'L3Harris GPNVG-18 NVG',
-    serial: 'L3H-44019',
-    nsn: '5855-01-610-3988',
-    category: 'Optics',
-    status: 'Issued',
-    custodian: 'SFC M. Vance',
-    timestamp: '14m ago',
+    name: 'Night Vision Binoculars',
+    tag: 'TAG #4019',
+    category: 'Weapons & Optics',
+    status: 'Checked Out',
+    assignedTo: 'Sgt. M. Vance',
+    updatedAgo: '14m ago',
   },
   {
     id: '3',
-    name: 'Lenco BearCat G3',
-    serial: 'BC-2024-819',
-    nsn: '2320-01-598-4100',
-    category: 'Fleet',
-    status: 'Issued',
-    custodian: 'Sgt. K. Alverez',
-    timestamp: '41m ago',
+    name: 'Patrol Cruiser #14',
+    tag: 'UNIT #819',
+    category: 'Vehicles',
+    status: 'Checked Out',
+    assignedTo: 'Ofc. K. Alverez',
+    updatedAgo: '41m ago',
   },
   {
     id: '4',
-    name: 'AN/PRC-163 TAC Radio',
-    serial: 'PRC-009481',
-    nsn: '5820-01-682-9910',
-    category: 'Comms',
-    status: 'In Vault',
-    custodian: 'COMSEC Safe 01',
-    timestamp: '1h ago',
+    name: 'Motorola APX Handheld Radio',
+    tag: 'TAG #9481',
+    category: 'Radios',
+    status: 'Available',
+    assignedTo: 'Charging Dock 02',
+    updatedAgo: '1h ago',
   },
   {
     id: '5',
-    name: 'SIG MCX SPEAR XM7',
-    serial: 'SIG-30812',
-    nsn: '1005-01-701-8802',
-    category: 'Weapons',
-    status: 'In Vault',
-    custodian: 'Vault C · Rack 12',
-    timestamp: '2h ago',
+    name: 'Ballistic Shield & Med Kit',
+    tag: 'TAG #3081',
+    category: 'Field Gear',
+    status: 'Available',
+    assignedTo: 'Locker B12',
+    updatedAgo: '2h ago',
   },
 ];
 
@@ -88,43 +79,52 @@ export function App() {
   const [items, setItems] = useState<InventoryItem[]>(INITIAL_ITEMS);
   const [phoneSearch, setPhoneSearch] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
-  const [scanSuccess, setScanSuccess] = useState<string | null>(null);
-  const [airGappedMode, setAirGappedMode] = useState(true);
-  const [biometricSign, setBiometricSign] = useState(true);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [autoReminders, setAutoReminders] = useState(true);
+  const [offlineSync, setOfflineSync] = useState(true);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
   const [waitlistEmail, setWaitlistEmail] = useState('');
-  const [waitlistOrg, setWaitlistOrg] = useState('Military / DoD Unit');
+  const [waitlistOrg, setWaitlistOrg] = useState('Law Enforcement Department');
 
-  const inVaultCount = items.filter((i) => i.status === 'In Vault').length;
-  const issuedCount = items.filter((i) => i.status === 'Issued').length;
+  const availableCount = items.filter((i) => i.status === 'Available').length;
+  const checkedOutCount = items.filter((i) => i.status === 'Checked Out').length;
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 2800);
+  };
 
   const toggleItemStatus = (id: string) => {
     setItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
-        const nextStatus = item.status === 'In Vault' ? 'Issued' : 'In Vault';
+        const nextStatus = item.status === 'Available' ? 'Checked Out' : 'Available';
+        showToast(
+          nextStatus === 'Checked Out'
+            ? `Checked out ${item.name} to Sgt. J. Mercer`
+            : `Returned ${item.name} to Armory`
+        );
         return {
           ...item,
           status: nextStatus,
-          custodian: nextStatus === 'Issued' ? 'Sgt. J. Mercer' : 'Vault C · Verified',
-          timestamp: 'Just now',
+          assignedTo: nextStatus === 'Checked Out' ? 'Sgt. J. Mercer' : 'Armory Rack A4',
+          updatedAgo: 'Just now',
         };
       })
     );
   };
 
-  const handleSimulateScan = () => {
-    const target = items.find((i) => i.status === 'In Vault') || items[0];
+  const handleQuickScan = () => {
+    const target = items.find((i) => i.status === 'Available') || items[0];
     toggleItemStatus(target.id);
-    setScanSuccess(`RFID Tag Verified: ${target.name} (${target.serial})`);
-    setTimeout(() => setScanSuccess(null), 3000);
   };
 
   const filteredPhoneItems = items.filter(
     (i) =>
       i.name.toLowerCase().includes(phoneSearch.toLowerCase()) ||
-      i.serial.toLowerCase().includes(phoneSearch.toLowerCase())
+      i.tag.toLowerCase().includes(phoneSearch.toLowerCase()) ||
+      i.assignedTo.toLowerCase().includes(phoneSearch.toLowerCase())
   );
 
   return (
@@ -144,28 +144,28 @@ export function App() {
                 GOVROUTE
               </div>
               <div className="font-mono text-[9px] tracking-[0.16em] text-neutral-500 uppercase mt-0.5">
-                AMERICA-FIRST TACTICAL LOGISTICS
+                SIMPLE INVENTORY FOR MILITARY & POLICE
               </div>
             </div>
           </a>
 
           {/* Center Numbered Links */}
           <nav className="hidden lg:flex items-center gap-12 font-mono text-[11px] tracking-[0.18em] text-neutral-400 uppercase">
-            <a href="#vault" className="hover:text-white transition-colors leading-relaxed">
+            <a href="#preview" className="hover:text-white transition-colors leading-relaxed">
               <span className="block text-neutral-500">01. THE</span>
-              <span>ARMORY</span>
+              <span>APP</span>
             </a>
-            <a href="#capabilities" className="hover:text-white transition-colors leading-relaxed">
-              <span className="block text-neutral-500">02. CORE</span>
-              <span>CAPABILITIES</span>
+            <a href="#features" className="hover:text-white transition-colors leading-relaxed">
+              <span className="block text-neutral-500">02. BUILT FOR</span>
+              <span>SPEED</span>
             </a>
-            <a href="#cryptography" className="hover:text-white transition-colors leading-relaxed">
-              <span className="block text-neutral-500">03. CHAIN OF</span>
-              <span>CUSTODY</span>
+            <a href="#workflow" className="hover:text-white transition-colors leading-relaxed">
+              <span className="block text-neutral-500">03. HOW IT</span>
+              <span>WORKS</span>
             </a>
-            <a href="#compliance" className="hover:text-white transition-colors leading-relaxed">
-              <span className="block text-neutral-500">04. SECURITY</span>
-              <span>COMPLIANCE</span>
+            <a href="#workflow" className="hover:text-white transition-colors leading-relaxed">
+              <span className="block text-neutral-500">04. FIELD</span>
+              <span>TEAMS</span>
             </a>
             <button
               onClick={() => {
@@ -198,36 +198,35 @@ export function App() {
       </header>
 
       {/* HERO SECTION */}
-      <main id="vault" className="max-w-[1340px] mx-auto px-6 sm:px-10 pt-14 pb-24 lg:pt-20">
+      <main id="preview" className="max-w-[1340px] mx-auto px-6 sm:px-10 pt-14 pb-24 lg:pt-20">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-start">
-          {/* LEFT COLUMN: Editorial Headline, Description & Screen Selector Cards */}
+          {/* LEFT COLUMN: Editorial Headline, User-Friendly Copy & Screen Selector Cards */}
           <div className="lg:col-span-7 pt-2">
             {/* Top Rounded Pill Badge */}
             <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-white/[0.12] bg-[#0C0C0E] font-mono text-[10px] sm:text-[11px] tracking-[0.2em] text-neutral-300 uppercase mb-9">
               <span className="w-2 h-2 rounded-full bg-white" />
-              <span>VETERAN-ENGINEERED · MILITARY & LAW ENFORCEMENT · iOS & ANDROID</span>
+              <span>ZERO TRAINING REQUIRED · MILITARY & LAW ENFORCEMENT · iOS & ANDROID</span>
             </div>
 
             {/* Classical Serif Headline with Italic Muted Contrast */}
             <h1 className="font-serif-editorial text-[54px] sm:text-[72px] lg:text-[84px] leading-[1.02] tracking-[-0.02em] text-white font-normal">
-              Commanding the{' '}
-              <span className="italic text-neutral-400 font-normal">tactical inventory</span> of
-              American forces.
+              Inventory tracking made{' '}
+              <span className="italic text-neutral-400 font-normal">effortless</span> for the
+              frontline.
             </h1>
 
-            {/* Calm, Minimalist Description Paragraph */}
+            {/* Calm, User-Friendly Description Paragraph */}
             <p className="mt-8 text-neutral-400 text-base sm:text-[19px] leading-[1.68] font-light max-w-[640px]">
-              GOVROUTE is a Veteran-Engineered, America-First, zero-trust logistics platform built
-              to track serialized weapons, optics, and fleet assets for military units and law
-              enforcement agencies. Every custody handoff is signed locally on your device before it
-              ever touches the cloud—operating seamlessly across armories, precincts, and air-gapped
-              environments.
+              GOVROUTE replaces messy clipboards, paper sign-out sheets, and clunky spreadsheets
+              with a clean mobile app your entire unit or precinct can use on day one. Scan any item
+              with your phone camera, check out gear in a single tap, and see who has what in
+              seconds.
             </p>
 
             {/* Interactive Live Preview Selector Header */}
             <div className="mt-14 pt-2 max-w-[650px]">
               <div className="flex items-center justify-between font-mono text-[10px] sm:text-[11px] tracking-[0.2em] text-neutral-500 uppercase mb-4">
-                <span>INTERACTIVE LIVE ARMORY PREVIEW — SELECT SCREEN:</span>
+                <span>INTERACTIVE LIVE APP PREVIEW — SELECT SCREEN:</span>
                 <span className="hidden sm:inline text-neutral-500">
                   CLICK INSIDE DEVICE TO INTERACT →
                 </span>
@@ -241,29 +240,29 @@ export function App() {
                       id: 'HOME',
                       num: '01',
                       title: 'HOME',
-                      sub: 'Armory overview & readiness.',
+                      sub: 'At-a-glance stock & activity.',
                       icon: Home,
                     },
                     {
-                      id: 'ASSETS',
+                      id: 'INVENTORY',
                       num: '02',
-                      title: 'ASSETS',
-                      sub: 'Serialized weapons & fleet.',
+                      title: 'ITEMS',
+                      sub: 'Search & filter all equipment.',
                       icon: Folder,
                     },
                     {
                       id: 'SCAN',
                       num: '03',
                       title: 'SCAN',
-                      sub: 'RFID & barcode custody issue.',
+                      sub: '1-tap camera check-in & out.',
                       icon: ScanLine,
                     },
                     {
-                      id: 'SETTINGS',
+                      id: 'TEAM',
                       num: '04',
-                      title: 'SETTINGS',
-                      sub: 'Zero-trust & CJIS audit export.',
-                      icon: Settings,
+                      title: 'TEAM',
+                      sub: 'Shift roster & quick reports.',
+                      icon: Users,
                     },
                   ] as const
                 ).map((tab) => {
@@ -280,11 +279,7 @@ export function App() {
                       }`}
                     >
                       <div className="flex items-center justify-between w-full">
-                        <span
-                          className={`font-mono text-[10px] tracking-widest ${
-                            isActive ? 'text-neutral-500' : 'text-neutral-500'
-                          }`}
-                        >
+                        <span className="font-mono text-[10px] tracking-widest text-neutral-500">
                           {tab.num}
                         </span>
                         <IconComponent
@@ -340,16 +335,24 @@ export function App() {
                       </div>
                       <span className="text-lg font-medium tracking-tight text-white">
                         {activeScreen === 'HOME' && 'Home'}
-                        {activeScreen === 'ASSETS' && 'Inventory'}
-                        {activeScreen === 'SCAN' && 'RFID Scanner'}
-                        {activeScreen === 'SETTINGS' && 'Security'}
+                        {activeScreen === 'INVENTORY' && 'Equipment'}
+                        {activeScreen === 'SCAN' && 'Quick Scan'}
+                        {activeScreen === 'TEAM' && 'Shift Roster'}
                       </span>
                     </div>
-                    <span className="text-xs text-neutral-500 font-normal">Armorer</span>
+                    <span className="text-xs text-neutral-500 font-normal">Unit 04</span>
                   </div>
                 </div>
 
-                {/* Screen Content Area (Scrollable) */}
+                {/* Toast notification inside phone */}
+                {toastMessage && (
+                  <div className="mx-5 mt-3 px-3.5 py-2.5 rounded-xl bg-white text-black text-xs font-medium flex items-center gap-2 shadow-lg">
+                    <Check className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">{toastMessage}</span>
+                  </div>
+                )}
+
+                {/* Screen Content Area */}
                 <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                   {/* SCREEN 01: HOME */}
                   {activeScreen === 'HOME' && (
@@ -357,54 +360,49 @@ export function App() {
                       {/* 2 Top Metric Cards */}
                       <div className="grid grid-cols-2 gap-3">
                         <div
-                          onClick={() => setActiveScreen('ASSETS')}
+                          onClick={() => setActiveScreen('INVENTORY')}
                           className="bg-[#121214] hover:bg-[#17171A] transition-colors border border-white/[0.07] rounded-2xl p-4 cursor-pointer"
                         >
-                          <Folder className="w-4 h-4 text-neutral-400 mb-3" />
+                          <Package className="w-4 h-4 text-neutral-400 mb-3" />
                           <div className="text-2xl font-semibold text-white">{items.length}</div>
-                          <div className="text-xs text-neutral-500 mt-1">Serialized Assets</div>
+                          <div className="text-xs text-neutral-500 mt-1">Total Tracked Items</div>
                         </div>
 
                         <div
                           onClick={() => setActiveScreen('SCAN')}
                           className="bg-[#121214] hover:bg-[#17171A] transition-colors border border-white/[0.07] rounded-2xl p-4 cursor-pointer"
                         >
-                          <Lock className="w-4 h-4 text-neutral-400 mb-3" />
-                          <div className="text-2xl font-semibold text-white">100%</div>
-                          <div className="text-xs text-neutral-500 mt-1">Custody Verified</div>
+                          <Clock className="w-4 h-4 text-neutral-400 mb-3" />
+                          <div className="text-2xl font-semibold text-white">{checkedOutCount}</div>
+                          <div className="text-xs text-neutral-500 mt-1">Checked Out Now</div>
                         </div>
                       </div>
 
-                      {/* Armory Vault Readiness Bar Card */}
+                      {/* Equipment Availability Card */}
                       <div className="bg-[#121214] border border-white/[0.07] rounded-2xl p-4">
                         <div className="flex items-center justify-between text-xs mb-2.5">
-                          <span className="font-medium text-white">Vault Accountability</span>
+                          <span className="font-medium text-white">Equipment Availability</span>
                           <span className="text-neutral-400">
-                            {inVaultCount} of {items.length} In Vault
+                            {availableCount} of {items.length} Ready
                           </span>
                         </div>
                         <div className="w-full h-1.5 bg-neutral-800 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-white rounded-full transition-all duration-300"
-                            style={{ width: `${(inVaultCount / items.length) * 100}%` }}
+                            style={{ width: `${(availableCount / items.length) * 100}%` }}
                           />
                         </div>
                         <div className="flex items-center justify-between text-[11px] text-neutral-500 mt-3">
-                          <span>In Vault: {inVaultCount}</span>
-                          <span>Field Issued: {issuedCount}</span>
+                          <span>Ready in Room: {availableCount}</span>
+                          <span>On Patrol / Field: {checkedOutCount}</span>
                         </div>
                       </div>
 
-                      {/* Recent Custody Transfers */}
+                      {/* Recent Activity List */}
                       <div className="pt-1">
                         <div className="flex items-center justify-between mb-2.5">
-                          <span className="text-sm font-medium text-white">Recent Custody Log</span>
-                          <button
-                            onClick={() => setActiveScreen('ASSETS')}
-                            className="text-[11px] text-neutral-400 hover:text-white cursor-pointer"
-                          >
-                            View all →
-                          </button>
+                          <span className="text-sm font-medium text-white">Recent Activity</span>
+                          <span className="text-[11px] text-neutral-500">Tap item to toggle</span>
                         </div>
 
                         <div className="space-y-2">
@@ -413,18 +411,17 @@ export function App() {
                               key={item.id}
                               onClick={() => toggleItemStatus(item.id)}
                               className="bg-[#121214] hover:bg-[#17171A] border border-white/[0.07] rounded-2xl p-3.5 flex items-center justify-between cursor-pointer transition-colors"
-                              title="Click to toggle Vault / Issued state"
                             >
                               <div>
                                 <div className="text-xs font-medium text-white">{item.name}</div>
-                                <div className="text-[11px] text-neutral-500 font-mono mt-0.5">
-                                  {item.serial} · {item.custodian}
+                                <div className="text-[11px] text-neutral-500 mt-0.5">
+                                  {item.tag} · {item.assignedTo}
                                 </div>
                               </div>
                               <div className="text-right">
                                 <span
-                                  className={`inline-block text-[10px] font-mono px-2 py-0.5 rounded-full border ${
-                                    item.status === 'In Vault'
+                                  className={`inline-block text-[10px] font-mono px-2.5 py-0.5 rounded-full border ${
+                                    item.status === 'Available'
                                       ? 'bg-white/10 text-white border-white/20'
                                       : 'bg-transparent text-neutral-400 border-white/10'
                                   }`}
@@ -432,7 +429,7 @@ export function App() {
                                   {item.status}
                                 </span>
                                 <div className="text-[10px] text-neutral-600 mt-1">
-                                  {item.timestamp}
+                                  {item.updatedAgo}
                                 </div>
                               </div>
                             </div>
@@ -442,8 +439,8 @@ export function App() {
                     </>
                   )}
 
-                  {/* SCREEN 02: ASSETS */}
-                  {activeScreen === 'ASSETS' && (
+                  {/* SCREEN 02: INVENTORY */}
+                  {activeScreen === 'INVENTORY' && (
                     <>
                       <div className="relative">
                         <Search className="w-3.5 h-3.5 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -451,7 +448,7 @@ export function App() {
                           type="text"
                           value={phoneSearch}
                           onChange={(e) => setPhoneSearch(e.target.value)}
-                          placeholder="Search serial or weapon..."
+                          placeholder="Search gear, tag, or officer..."
                           className="w-full bg-[#121214] border border-white/[0.08] rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-white/30"
                         />
                       </div>
@@ -462,21 +459,19 @@ export function App() {
                           return (
                             <div
                               key={item.id}
-                              onClick={() =>
-                                setSelectedItemId(expanded ? null : item.id)
-                              }
+                              onClick={() => setSelectedItemId(expanded ? null : item.id)}
                               className="bg-[#121214] border border-white/[0.07] rounded-2xl p-3.5 cursor-pointer transition-colors hover:border-white/20"
                             >
                               <div className="flex items-center justify-between">
                                 <div>
                                   <div className="text-xs font-medium text-white">{item.name}</div>
-                                  <div className="text-[11px] font-mono text-neutral-500 mt-0.5">
-                                    SN: {item.serial}
+                                  <div className="text-[11px] text-neutral-500 mt-0.5">
+                                    {item.tag} · {item.assignedTo}
                                   </div>
                                 </div>
                                 <span
                                   className={`text-[10px] font-mono px-2.5 py-0.5 rounded-full border ${
-                                    item.status === 'In Vault'
+                                    item.status === 'Available'
                                       ? 'bg-white text-black border-white font-semibold'
                                       : 'bg-transparent text-neutral-300 border-white/15'
                                   }`}
@@ -486,25 +481,25 @@ export function App() {
                               </div>
 
                               {expanded && (
-                                <div className="mt-3 pt-3 border-t border-white/[0.07] text-[11px] font-mono text-neutral-400 space-y-1.5">
+                                <div className="mt-3 pt-3 border-t border-white/[0.07] text-[11px] text-neutral-400 space-y-1.5">
                                   <div className="flex justify-between">
-                                    <span>NSN:</span>
-                                    <span className="text-white">{item.nsn}</span>
+                                    <span>Category:</span>
+                                    <span className="text-white">{item.category}</span>
                                   </div>
                                   <div className="flex justify-between">
-                                    <span>Custodian:</span>
-                                    <span className="text-white">{item.custodian}</span>
+                                    <span>Current Holder:</span>
+                                    <span className="text-white">{item.assignedTo}</span>
                                   </div>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       toggleItemStatus(item.id);
                                     }}
-                                    className="w-full mt-2 py-1.5 rounded-lg bg-white text-black font-mono text-[10px] font-semibold uppercase tracking-wider cursor-pointer"
+                                    className="w-full mt-2 py-2 rounded-lg bg-white text-black font-mono text-[10px] font-semibold uppercase tracking-wider cursor-pointer"
                                   >
-                                    {item.status === 'In Vault'
-                                      ? 'Sign Out to Operator'
-                                      : 'Check Back Into Vault'}
+                                    {item.status === 'Available'
+                                      ? '1-Tap Check Out'
+                                      : '1-Tap Return Item'}
                                   </button>
                                 </div>
                               )}
@@ -515,74 +510,89 @@ export function App() {
                     </>
                   )}
 
-                  {/* SCREEN 03: SCAN */}
+                  {/* SCREEN 03: QUICK SCAN */}
                   {activeScreen === 'SCAN' && (
                     <div className="space-y-4">
-                      <div className="bg-[#121214] border border-white/[0.08] rounded-2xl p-6 text-center relative overflow-hidden">
+                      <div className="bg-[#121214] border border-white/[0.08] rounded-2xl p-6 text-center">
                         <div className="w-16 h-16 rounded-2xl border border-white/20 bg-white/[0.03] mx-auto flex items-center justify-center mb-4">
                           <QrCode className="w-8 h-8 text-white" />
                         </div>
                         <div className="text-sm font-medium text-white">
-                          UHF RFID & IUID Scanner
+                          Point & Shoot Check-Out
                         </div>
-                        <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                          Hold device near weapon UID matrix or walk through armory portal to sign
-                          custody block.
+                        <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">
+                          Point your phone camera at any barcode, QR sticker, or serial tag to check
+                          gear in or out in under a second.
                         </p>
 
                         <button
-                          onClick={handleSimulateScan}
+                          onClick={handleQuickScan}
                           className="mt-5 w-full py-3 rounded-xl bg-white hover:bg-neutral-200 text-black font-mono text-xs font-semibold uppercase tracking-wider transition-colors cursor-pointer"
                         >
-                          Simulate RFID Scan
+                          Simulate Camera Scan
                         </button>
                       </div>
 
-                      {scanSuccess && (
-                        <div className="bg-white/10 border border-white/20 rounded-xl p-3 text-xs font-mono text-white flex items-center gap-2">
-                          <Check className="w-4 h-4 shrink-0" />
-                          <span>{scanSuccess}</span>
-                        </div>
-                      )}
-
-                      <div className="bg-[#121214] border border-white/[0.07] rounded-2xl p-4 space-y-2 text-xs">
+                      <div className="bg-[#121214] border border-white/[0.07] rounded-2xl p-4 space-y-2.5 text-xs">
                         <div className="flex justify-between text-neutral-400">
-                          <span>Active Signer</span>
-                          <span className="text-white font-mono">CAC-8492-US</span>
+                          <span>Logged-In User</span>
+                          <span className="text-white font-medium">Sgt. J. Mercer</span>
                         </div>
                         <div className="flex justify-between text-neutral-400">
-                          <span>Signature Cipher</span>
-                          <span className="text-white font-mono">SHA-256 / FIPS</span>
+                          <span>Scan Mode</span>
+                          <span className="text-white">Auto Check-Out / Return</span>
                         </div>
                         <div className="flex justify-between text-neutral-400">
-                          <span>Offline Mesh Queue</span>
-                          <span className="text-white font-mono">0 Pending</span>
+                          <span>Works Offline</span>
+                          <span className="text-white">Yes (Auto-Syncs)</span>
                         </div>
                       </div>
                     </div>
                   )}
 
-                  {/* SCREEN 04: SETTINGS */}
-                  {activeScreen === 'SETTINGS' && (
+                  {/* SCREEN 04: TEAM & PREFERENCES */}
+                  {activeScreen === 'TEAM' && (
                     <div className="space-y-3">
+                      <div className="bg-[#121214] border border-white/[0.07] rounded-2xl p-4 space-y-3">
+                        <div className="text-xs font-medium text-white">On-Duty Shift Roster</div>
+                        {[
+                          { name: 'Sgt. M. Vance', role: 'Squad Leader', count: '1 item out' },
+                          { name: 'Ofc. K. Alverez', role: 'Patrol Unit 14', count: '1 item out' },
+                          { name: 'Sgt. J. Mercer', role: 'Armory Lead', count: 'All returned' },
+                        ].map((member) => (
+                          <div
+                            key={member.name}
+                            className="flex items-center justify-between pt-2 border-t border-white/[0.06] text-xs"
+                          >
+                            <div>
+                              <div className="text-white font-medium">{member.name}</div>
+                              <div className="text-[11px] text-neutral-500">{member.role}</div>
+                            </div>
+                            <span className="text-[11px] font-mono text-neutral-300">
+                              {member.count}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
                       <div className="bg-[#121214] border border-white/[0.07] rounded-2xl p-4 flex items-center justify-between">
                         <div>
                           <div className="text-xs font-medium text-white">
-                            Air-Gapped DDIL Mode
+                            End-of-Shift Reminders
                           </div>
                           <div className="text-[11px] text-neutral-500 mt-0.5">
-                            Store custody blocks locally offline
+                            Notify officers when gear is still out
                           </div>
                         </div>
                         <button
-                          onClick={() => setAirGappedMode(!airGappedMode)}
+                          onClick={() => setAutoReminders(!autoReminders)}
                           className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
-                            airGappedMode ? 'bg-white' : 'bg-neutral-800'
+                            autoReminders ? 'bg-white' : 'bg-neutral-800'
                           }`}
                         >
                           <div
                             className={`w-4 h-4 rounded-full transition-transform ${
-                              airGappedMode
+                              autoReminders
                                 ? 'bg-black translate-x-4'
                                 : 'bg-neutral-400 translate-x-0'
                             }`}
@@ -592,22 +602,20 @@ export function App() {
 
                       <div className="bg-[#121214] border border-white/[0.07] rounded-2xl p-4 flex items-center justify-between">
                         <div>
-                          <div className="text-xs font-medium text-white">
-                            CAC + Biometric Dual Sign
-                          </div>
+                          <div className="text-xs font-medium text-white">Offline Field Mode</div>
                           <div className="text-[11px] text-neutral-500 mt-0.5">
-                            Require hardware token on weapon issue
+                            Keep scanning with zero cell service
                           </div>
                         </div>
                         <button
-                          onClick={() => setBiometricSign(!biometricSign)}
+                          onClick={() => setOfflineSync(!offlineSync)}
                           className={`w-10 h-6 rounded-full p-1 transition-colors cursor-pointer ${
-                            biometricSign ? 'bg-white' : 'bg-neutral-800'
+                            offlineSync ? 'bg-white' : 'bg-neutral-800'
                           }`}
                         >
                           <div
                             className={`w-4 h-4 rounded-full transition-transform ${
-                              biometricSign
+                              offlineSync
                                 ? 'bg-black translate-x-4'
                                 : 'bg-neutral-400 translate-x-0'
                             }`}
@@ -615,20 +623,12 @@ export function App() {
                         </button>
                       </div>
 
-                      <div className="bg-[#121214] border border-white/[0.07] rounded-2xl p-4 space-y-2">
-                        <div className="text-xs font-medium text-white">
-                          Compliance & Audit Packet
-                        </div>
-                        <p className="text-[11px] text-neutral-500 leading-relaxed">
-                          Generate signed DA Form 2062 or CJIS chain-of-custody ledger export.
-                        </p>
-                        <button
-                          onClick={() => setScanSuccess('Exported signed SHA-256 audit log.')}
-                          className="mt-2 w-full py-2.5 rounded-xl border border-white/20 hover:bg-white hover:text-black text-white font-mono text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
-                        >
-                          Export Audit Ledger
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => showToast('Shift inventory PDF report downloaded.')}
+                        className="w-full py-3 rounded-xl border border-white/20 hover:bg-white hover:text-black text-white font-mono text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
+                      >
+                        Export 1-Click Shift Report
+                      </button>
                     </div>
                   )}
                 </div>
@@ -638,9 +638,9 @@ export function App() {
                   {(
                     [
                       { id: 'HOME', label: 'Home', icon: Home },
-                      { id: 'ASSETS', label: 'Assets', icon: Folder },
+                      { id: 'INVENTORY', label: 'Items', icon: Folder },
                       { id: 'SCAN', label: 'Scan', icon: ScanLine },
-                      { id: 'SETTINGS', label: 'Settings', icon: Settings },
+                      { id: 'TEAM', label: 'Team', icon: Users },
                     ] as const
                   ).map((nav) => {
                     const active = activeScreen === nav.id;
@@ -665,18 +665,18 @@ export function App() {
         </div>
       </main>
 
-      {/* SECTION 02: MINIMALIST CAPABILITIES */}
+      {/* SECTION 02: USER-FRIENDLY APPEAL */}
       <section
-        id="capabilities"
+        id="features"
         className="border-t border-white/[0.08] py-24 max-w-[1340px] mx-auto px-6 sm:px-10"
       >
         <div className="max-w-2xl mb-16">
           <div className="font-mono text-[11px] tracking-[0.22em] text-neutral-500 uppercase mb-4">
-            02. CORE CAPABILITIES
+            02. BUILT FOR SPEED & SIMPLICITY
           </div>
           <h2 className="font-serif-editorial text-4xl sm:text-5xl text-white font-normal leading-tight">
-            Built for zero-blindspot{' '}
-            <span className="italic text-neutral-400">accountability.</span>
+            So intuitive your team will{' '}
+            <span className="italic text-neutral-400">actually enjoy</span> using it.
           </h2>
         </div>
 
@@ -684,23 +684,23 @@ export function App() {
           {[
             {
               num: '01',
-              title: 'Serialized Asset Tracking',
-              desc: 'Track weapons, optics, suppressors, and COMSEC keys by MIL-STD-130 IUID, NSN, and serial number.',
+              title: 'Zero Training Required',
+              desc: 'Designed like a modern consumer app—not a 1990s government database. Any officer or soldier can learn it in 60 seconds.',
             },
             {
               num: '02',
-              title: 'Armory & Fleet Readiness',
-              desc: 'Instantaneous visibility into vault counts, patrol vehicle readiness, and scheduled maintenance.',
+              title: '1-Tap Check-In & Out',
+              desc: 'Scan a barcode with your phone camera and tap once to assign rifles, radios, vehicles, or medical kits.',
             },
             {
               num: '03',
-              title: 'RFID & Barcode Scanning',
-              desc: 'Verify entire Pelican loadouts in seconds via passive UHF portals or rugged iOS & Android devices.',
+              title: 'Instant Who-Has-What',
+              desc: 'Type any serial number, vehicle unit, or officer name to see exactly who has an item and when it was checked out.',
             },
             {
               num: '04',
-              title: 'Immutable Audit Logs',
-              desc: 'Every handoff is signed with CAC/PIV credentials and anchored to a tamper-evident SHA-256 ledger.',
+              title: 'Automatic Shift Reports',
+              desc: 'Stop typing up end-of-shift inventory logs by hand. Export clean, ready-to-share PDF handoff reports in one tap.',
             },
           ].map((item) => (
             <div
@@ -719,33 +719,33 @@ export function App() {
         </div>
       </section>
 
-      {/* SECTION 03 & 04: CRYPTOGRAPHY & COMPLIANCE */}
+      {/* SECTION 03: EVERYDAY WORKFLOW */}
       <section
-        id="cryptography"
+        id="workflow"
         className="border-t border-white/[0.08] py-24 max-w-[1340px] mx-auto px-6 sm:px-10"
       >
-        <div id="compliance" className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           <div className="lg:col-span-6 space-y-6">
             <div className="font-mono text-[11px] tracking-[0.22em] text-neutral-500 uppercase">
-              03. ZERO-KNOWLEDGE CUSTODY & COMPLIANCE
+              03. GOODBYE CLIPBOARDS & SPREADSHEETS
             </div>
             <h2 className="font-serif-editorial text-4xl sm:text-5xl text-white font-normal leading-tight">
-              Encrypted on-device.{' '}
-              <span className="italic text-neutral-400">Sovereign by design.</span>
+              Turn a two-hour gear count into a{' '}
+              <span className="italic text-neutral-400">two-minute walk-through.</span>
             </h2>
             <p className="text-neutral-400 text-base leading-relaxed font-light max-w-xl">
-              Sensitive unit inventories never traverse public commercial relays. GovRoute signs
-              every custody record locally with FIPS 140-3 validated cryptography and deploys inside
-              AWS GovCloud, SIPR/air-gapped enclaves, or offline field kits.
+              Whether you are running morning shift change at a busy police precinct or managing
+              equipment across a battalion armory, GovRoute gets your people out of the supply room
+              and back to the mission.
             </p>
           </div>
 
           <div className="lg:col-span-6 grid grid-cols-2 gap-4">
             {[
-              { label: 'ENCRYPTION STANDARD', value: 'AES-256-GCM / FIPS 140-3' },
-              { label: 'LAW ENFORCEMENT', value: 'CJIS Security Policy v5.9' },
-              { label: 'DEFENSE SERIALIZATION', value: 'MIL-STD-130 IUID & DPAS' },
-              { label: 'FIELD CONNECTIVITY', value: 'Offline DDIL & TAK Sync' },
+              { label: 'SETUP TIME', value: 'Import CSV in 5 Minutes' },
+              { label: 'HARDWARE NEEDED', value: 'Any iPhone, iPad, or Android' },
+              { label: 'CHECK-OUT SPEED', value: 'Under 2 Seconds per Item' },
+              { label: 'CELL SERVICE REQUIRED', value: 'Works 100% Offline in Field' },
             ].map((spec) => (
               <div
                 key={spec.label}
@@ -764,7 +764,7 @@ export function App() {
       {/* MINIMALIST FOOTER */}
       <footer className="border-t border-white/[0.08] py-12">
         <div className="max-w-[1340px] mx-auto px-6 sm:px-10 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-[11px] tracking-[0.16em] text-neutral-500 uppercase">
-          <div>GOVROUTE INC. · VETERAN-FOUNDED · UNITED STATES OF AMERICA</div>
+          <div>GOVROUTE INC. · VETERAN-FOUNDED · BUILT FOR MILITARY & LAW ENFORCEMENT</div>
           <div className="flex items-center gap-6">
             <button
               onClick={() => {
@@ -795,10 +795,10 @@ export function App() {
                 <div className="w-10 h-10 rounded-full bg-white text-black mx-auto flex items-center justify-center">
                   <Check className="w-5 h-5" />
                 </div>
-                <h3 className="font-serif-editorial text-3xl text-white">Request Received</h3>
+                <h3 className="font-serif-editorial text-3xl text-white">You’re on the list</h3>
                 <p className="text-sm text-neutral-400 font-light">
-                  We have registered <span className="text-white">{waitlistEmail}</span> ({waitlistOrg})
-                  for early armory deployment access.
+                  We have registered <span className="text-white">{waitlistEmail}</span> (
+                  {waitlistOrg}) for early access.
                 </p>
                 <button
                   onClick={() => setWaitlistOpen(false)}
@@ -816,42 +816,42 @@ export function App() {
                 className="space-y-5"
               >
                 <div className="font-mono text-[10px] tracking-[0.2em] text-neutral-500 uppercase">
-                  EARLY ACCESS & PILOT DEPLOYMENT
+                  EARLY ACCESS
                 </div>
                 <h3 className="font-serif-editorial text-3xl text-white font-normal">
                   Join the GovRoute Waitlist
                 </h3>
                 <p className="text-xs text-neutral-400 font-light leading-relaxed">
-                  Exclusively available to U.S. military units, federal agencies, and state & local
-                  law enforcement departments.
+                  Get early access for your military unit or law enforcement department. Set up
+                  takes less than 5 minutes.
                 </p>
 
                 <div>
                   <label className="block font-mono text-[10px] tracking-widest uppercase text-neutral-400 mb-2">
-                    UNIT / AGENCY TYPE
+                    TEAM / DEPARTMENT
                   </label>
                   <select
                     value={waitlistOrg}
                     onChange={(e) => setWaitlistOrg(e.target.value)}
                     className="w-full bg-[#141417] border border-white/10 rounded-xl px-3.5 py-3 text-xs text-white focus:outline-none focus:border-white/30"
                   >
-                    <option>Military / DoD Unit</option>
-                    <option>Law Enforcement / SWAT Division</option>
-                    <option>Federal Agency</option>
-                    <option>National Guard / State Defense</option>
+                    <option>Law Enforcement Department</option>
+                    <option>Military Unit / Armory</option>
+                    <option>National Guard / Reserve</option>
+                    <option>Federal / State Agency</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block font-mono text-[10px] tracking-widest uppercase text-neutral-400 mb-2">
-                    OFFICIAL EMAIL (.MIL / .GOV / AGENCY)
+                    WORK EMAIL
                   </label>
                   <input
                     type="email"
                     required
                     value={waitlistEmail}
                     onChange={(e) => setWaitlistEmail(e.target.value)}
-                    placeholder="name@agency.gov"
+                    placeholder="you@department.gov"
                     className="w-full bg-[#141417] border border-white/10 rounded-xl px-3.5 py-3 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white/30"
                   />
                 </div>
@@ -860,7 +860,7 @@ export function App() {
                   type="submit"
                   className="w-full py-3.5 rounded-xl bg-white hover:bg-neutral-200 text-black font-mono text-xs font-semibold tracking-[0.16em] uppercase transition-colors cursor-pointer"
                 >
-                  Request Access ↗
+                  Join Waitlist ↗
                 </button>
               </form>
             )}
