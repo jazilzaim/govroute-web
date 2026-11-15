@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Home,
   Folder,
@@ -11,113 +11,431 @@ import {
   Wifi,
   Package,
   Clock,
+  ChevronDown,
+  Shield,
+  Plane,
+  BadgeCheck,
   X,
 } from 'lucide-react';
+import { trackEvent, submitWaitlistEntry } from './lib/firebase';
 
 type ScreenTab = 'HOME' | 'INVENTORY' | 'SCAN' | 'TEAM';
+type IndustryId = 'DEFENSE' | 'LAW_ENFORCEMENT' | 'AVIATION';
 
 interface InventoryItem {
   id: string;
   name: string;
   tag: string;
-  category: 'Weapons & Optics' | 'Vehicles' | 'Radios' | 'Field Gear';
+  category: string;
   status: 'Available' | 'Checked Out';
   assignedTo: string;
   updatedAgo: string;
 }
 
-const INITIAL_ITEMS: InventoryItem[] = [
-  {
-    id: '1',
-    name: 'M4A1 Patrol Carbine',
-    tag: 'TAG #4102',
-    category: 'Weapons & Optics',
-    status: 'Available',
-    assignedTo: 'Armory Rack A4',
-    updatedAgo: '2m ago',
+interface IndustryProfile {
+  id: IndustryId;
+  name: string;
+  shortTag: string;
+  unitLabel: string;
+  defaultHolder: string;
+  returnLocation: string;
+  headline: string;
+  headlineItalic: string;
+  summary: string;
+  roster: { name: string; role: string; count: string }[];
+  benefits: { num: string; title: string; desc: string }[];
+  metrics: { label: string; value: string }[];
+  sampleItems: InventoryItem[];
+}
+
+const INDUSTRIES: Record<IndustryId, IndustryProfile> = {
+  DEFENSE: {
+    id: 'DEFENSE',
+    name: 'Defense',
+    shortTag: 'Armories, Battalions & Field Units',
+    unitLabel: '1st Bn Armory',
+    defaultHolder: 'Sgt. J. Mercer',
+    returnLocation: 'Armory Vault A4',
+    headline: 'Built for the armory, supply room, and',
+    headlineItalic: 'daily unit operations.',
+    summary:
+      'Replace paper hand-receipts and multi-hour equipment counts with a mobile app every service member and supply specialist can use immediately—whether in the armory or out on training.',
+    roster: [
+      { name: 'Sgt. M. Vance', role: '1st Squad Leader', count: '1 item out' },
+      { name: 'Cpl. A. Thorne', role: 'Comms Specialist', count: '1 item out' },
+      { name: 'Sgt. J. Mercer', role: 'Unit Armorer', count: 'All returned' },
+    ],
+    benefits: [
+      {
+        num: '01',
+        title: 'Rapid Sensitive-Item Counts',
+        desc: 'Complete 100% serialized weapon, optic, and night-vision inventory sweeps in minutes using any smartphone camera.',
+      },
+      {
+        num: '02',
+        title: 'Digital Hand Receipts',
+        desc: 'Issue rifles, radios, and field kits to squads in one tap—eliminating messy clipboards and lost paper sign-out sheets.',
+      },
+      {
+        num: '03',
+        title: '100% Offline Field Mode',
+        desc: 'Keep checking gear in and out during austere training exercises or deployments with zero cell or Wi-Fi connectivity.',
+      },
+      {
+        num: '04',
+        title: 'Change-of-Command Ready',
+        desc: 'Export clean, timestamped unit property logs in a single click for inspections and leadership handoffs.',
+      },
+    ],
+    metrics: [
+      { label: 'VAULT COUNT SPEED', value: 'Under 3 Minutes' },
+      { label: 'FIELD CONNECTIVITY', value: 'Works 100% Offline' },
+      { label: 'GEAR TRACKED', value: 'Weapons, Optics, Comms & Fleet' },
+      { label: 'TRAINING REQUIRED', value: 'Under 60 Seconds' },
+    ],
+    sampleItems: [
+      {
+        id: 'def-1',
+        name: 'M4A1 SOPMOD Carbine',
+        tag: 'SN #994102',
+        category: 'Weapons & Optics',
+        status: 'Available',
+        assignedTo: 'Armory Rack A4',
+        updatedAgo: '2m ago',
+      },
+      {
+        id: 'def-2',
+        name: 'AN/PVS-31B Night Vision',
+        tag: 'SN #44019',
+        category: 'Weapons & Optics',
+        status: 'Checked Out',
+        assignedTo: 'Sgt. M. Vance',
+        updatedAgo: '14m ago',
+      },
+      {
+        id: 'def-3',
+        name: 'AN/PRC-163 Tactical Radio',
+        tag: 'SN #009481',
+        category: 'Comms',
+        status: 'Checked Out',
+        assignedTo: 'Cpl. A. Thorne',
+        updatedAgo: '38m ago',
+      },
+      {
+        id: 'def-4',
+        name: 'JLTV Utility Vehicle #08',
+        tag: 'BUMPER #412',
+        category: 'Motor Pool',
+        status: 'Available',
+        assignedTo: 'Motor Pool Bay 2',
+        updatedAgo: '1h ago',
+      },
+      {
+        id: 'def-5',
+        name: 'Squad Combat Lifesaver Bag',
+        tag: 'KIT #3081',
+        category: 'Medical',
+        status: 'Available',
+        assignedTo: 'Supply Cage B',
+        updatedAgo: '2h ago',
+      },
+    ],
   },
-  {
-    id: '2',
-    name: 'Night Vision Binoculars',
-    tag: 'TAG #4019',
-    category: 'Weapons & Optics',
-    status: 'Checked Out',
-    assignedTo: 'Sgt. M. Vance',
-    updatedAgo: '14m ago',
+  LAW_ENFORCEMENT: {
+    id: 'LAW_ENFORCEMENT',
+    name: 'Law Enforcement',
+    shortTag: 'Precincts, Patrol & SWAT Divisions',
+    unitLabel: 'Metro Precinct 04',
+    defaultHolder: 'Ofc. M. Delgado',
+    returnLocation: 'Quartermaster Locker 02',
+    headline: 'Faster shift changes so officers spend less time at the',
+    headlineItalic: 'equipment window.',
+    summary:
+      'Get patrol officers out of the supply room and onto the street. Scan out body cameras, tasers, patrol rifles, and cruiser keys at roll call in seconds with automatic end-of-shift return reminders.',
+    roster: [
+      { name: 'Ofc. K. Alverez', role: 'Patrol Unit 14', count: '1 item out' },
+      { name: 'Sgt. D. Brooks', role: 'SWAT Team Lead', count: '1 item out' },
+      { name: 'Ofc. M. Delgado', role: 'Day Shift Quartermaster', count: 'All returned' },
+    ],
+    benefits: [
+      {
+        num: '01',
+        title: '10-Second Roll Call Issue',
+        desc: 'Scan radios, body-worn cameras, tasers, and cruiser keys in a single tap so shift changes never bottleneck.',
+      },
+      {
+        num: '02',
+        title: 'Cruiser & SWAT Kit Tracking',
+        desc: 'Track gear assigned to specific patrol vehicles, K9 units, or SWAT trucks alongside individual officer loadouts.',
+      },
+      {
+        num: '03',
+        title: 'Automatic Shift Reminders',
+        desc: 'Automatically notify officers at the end of their tour if a radio, rifle, or key ring has not been checked back in.',
+      },
+      {
+        num: '04',
+        title: 'Effortless Precinct Audits',
+        desc: 'Maintain a clean, searchable custody history for every piece of department equipment without touching a spreadsheet.',
+      },
+    ],
+    metrics: [
+      { label: 'ROLL CALL CHECK-OUT', value: 'Under 2 Seconds / Item' },
+      { label: 'UNRETURNED GEAR', value: 'Automated Shift Alerts' },
+      { label: 'GEAR TRACKED', value: 'Radios, BWCs, Rifles & Cruisers' },
+      { label: 'SETUP TIME', value: 'Import Roster in 5 Mins' },
+    ],
+    sampleItems: [
+      {
+        id: 'le-1',
+        name: 'Axon Body 4 Camera',
+        tag: 'BWC #1042',
+        category: 'Patrol Electronics',
+        status: 'Available',
+        assignedTo: 'Docking Bay 03',
+        updatedAgo: '4m ago',
+      },
+      {
+        id: 'le-2',
+        name: 'Patrol Interceptor SUV #14',
+        tag: 'UNIT #819',
+        category: 'Fleet Vehicles',
+        status: 'Checked Out',
+        assignedTo: 'Ofc. K. Alverez',
+        updatedAgo: '22m ago',
+      },
+      {
+        id: 'le-3',
+        name: 'Lenco BearCat SWAT Kit',
+        tag: 'TAC #409',
+        category: 'SWAT & Ballistics',
+        status: 'Checked Out',
+        assignedTo: 'Sgt. D. Brooks',
+        updatedAgo: '49m ago',
+      },
+      {
+        id: 'le-4',
+        name: 'Motorola APX 8000 Radio',
+        tag: 'RAD #9481',
+        category: 'Comms',
+        status: 'Available',
+        assignedTo: 'Charging Rack A',
+        updatedAgo: '1h ago',
+      },
+      {
+        id: 'le-5',
+        name: 'Taser 10 & Duty Holster',
+        tag: 'CEW #7712',
+        category: 'Less-Lethal',
+        status: 'Available',
+        assignedTo: 'Armory Locker 09',
+        updatedAgo: '3h ago',
+      },
+    ],
   },
-  {
-    id: '3',
-    name: 'Patrol Cruiser #14',
-    tag: 'UNIT #819',
-    category: 'Vehicles',
-    status: 'Checked Out',
-    assignedTo: 'Ofc. K. Alverez',
-    updatedAgo: '41m ago',
+  AVIATION: {
+    id: 'AVIATION',
+    name: 'Aviation',
+    shortTag: 'Hangar Tool Cribs, FOD & Flight Line',
+    unitLabel: 'Hangar Bay 02',
+    defaultHolder: 'Tech R. Vance (A&P)',
+    returnLocation: 'Tool Crib Shadowboard B',
+    headline: 'Total tool accountability and FOD prevention from the',
+    headlineItalic: 'hangar to the flight line.',
+    summary:
+      'Never delay a sortie or flight over a missing tool or misplaced rotable part. Track calibrated torque wrenches, avionics test kits, and ground support equipment across every aircraft tail number.',
+    roster: [
+      { name: 'M. Chen (A&P Lead)', role: 'Tail #N402GX Crew', count: '1 item out' },
+      { name: 'Capt. L. Miller', role: 'Flight Line Ops', count: '1 item out' },
+      { name: 'R. Vance', role: 'Tool Crib Coordinator', count: 'All returned' },
+    ],
+    benefits: [
+      {
+        num: '01',
+        title: 'Zero-FOD Tool Verification',
+        desc: 'Sign toolboxes and shadowboards out to a specific aircraft tail number—and verify 100% tool return before aircraft release.',
+      },
+      {
+        num: '02',
+        title: 'Calibration & Expiry Alerts',
+        desc: 'Automatically flag torque wrenches, pitot-static testers, and life rafts before their calibration or inspection dates expire.',
+      },
+      {
+        num: '03',
+        title: 'AOG & Rotable Spares Lookup',
+        desc: 'Search any part number or serial tag from the tarmac to see which hangar bay or supply shelf has the part in stock.',
+      },
+      {
+        num: '04',
+        title: 'GSE & Tarmac Tracking',
+        desc: 'Know which flight crew or maintenance bay currently has every tug, GPU power cart, borescope, and headset kit.',
+      },
+    ],
+    metrics: [
+      { label: 'FOD CLEARANCE CHECK', value: '100% Tail-Number Linked' },
+      { label: 'CALIBRATION TRACKING', value: 'Automated Due-Date Alerts' },
+      { label: 'GEAR TRACKED', value: 'Tool Cribs, Rotables & GSE' },
+      { label: 'DEVICE SUPPORT', value: 'Hangar iPads & Mobile Phones' },
+    ],
+    sampleItems: [
+      {
+        id: 'av-1',
+        name: 'Snap-On Digital Torque Wrench',
+        tag: 'CAL #TW-882',
+        category: 'Calibrated Tools',
+        status: 'Available',
+        assignedTo: 'Shadowboard A1',
+        updatedAgo: '5m ago',
+      },
+      {
+        id: 'av-2',
+        name: 'Olympus Turbine Borescope Kit',
+        tag: 'NDT #4019',
+        category: 'Inspection Gear',
+        status: 'Checked Out',
+        assignedTo: 'M. Chen · Tail #402',
+        updatedAgo: '18m ago',
+      },
+      {
+        id: 'av-3',
+        name: '28V Ground Power Unit (GPU)',
+        tag: 'GSE #109',
+        category: 'Ground Support',
+        status: 'Checked Out',
+        assignedTo: 'Capt. L. Miller · Ramp 3',
+        updatedAgo: '35m ago',
+      },
+      {
+        id: 'av-4',
+        name: 'Garmin G5000 Avionics LRU',
+        tag: 'P/N #011-042',
+        category: 'Rotable Spares',
+        status: 'Available',
+        assignedTo: 'Bonded Cage 04',
+        updatedAgo: '1h ago',
+      },
+      {
+        id: 'av-5',
+        name: 'RVSM Pitot-Static Test Box',
+        tag: 'CAL #PS-210',
+        category: 'Avionics Test',
+        status: 'Available',
+        assignedTo: 'Tool Crib Bay 2',
+        updatedAgo: '2h ago',
+      },
+    ],
   },
-  {
-    id: '4',
-    name: 'Motorola APX Handheld Radio',
-    tag: 'TAG #9481',
-    category: 'Radios',
-    status: 'Available',
-    assignedTo: 'Charging Dock 02',
-    updatedAgo: '1h ago',
-  },
-  {
-    id: '5',
-    name: 'Ballistic Shield & Med Kit',
-    tag: 'TAG #3081',
-    category: 'Field Gear',
-    status: 'Available',
-    assignedTo: 'Locker B12',
-    updatedAgo: '2h ago',
-  },
-];
+};
 
 export function App() {
+  const [selectedIndustry, setSelectedIndustry] = useState<IndustryId>('DEFENSE');
+  const [navDropdownOpen, setNavDropdownOpen] = useState(false);
+  const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
+  const navDropdownRef = useRef<HTMLDivElement>(null);
+  const sectionDropdownRef = useRef<HTMLDivElement>(null);
+
   const [activeScreen, setActiveScreen] = useState<ScreenTab>('HOME');
-  const [items, setItems] = useState<InventoryItem[]>(INITIAL_ITEMS);
+  const [itemsByIndustry, setItemsByIndustry] = useState<Record<IndustryId, InventoryItem[]>>({
+    DEFENSE: INDUSTRIES.DEFENSE.sampleItems,
+    LAW_ENFORCEMENT: INDUSTRIES.LAW_ENFORCEMENT.sampleItems,
+    AVIATION: INDUSTRIES.AVIATION.sampleItems,
+  });
+
   const [phoneSearch, setPhoneSearch] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [autoReminders, setAutoReminders] = useState(true);
   const [offlineSync, setOfflineSync] = useState(true);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
   const [waitlistEmail, setWaitlistEmail] = useState('');
-  const [waitlistOrg, setWaitlistOrg] = useState('Law Enforcement Department');
+  const [waitlistOrg, setWaitlistOrg] = useState('Defense');
 
+  const currentProfile = INDUSTRIES[selectedIndustry];
+  const items = itemsByIndustry[selectedIndustry];
   const availableCount = items.filter((i) => i.status === 'Available').length;
   const checkedOutCount = items.filter((i) => i.status === 'Checked Out').length;
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (navDropdownRef.current && !navDropdownRef.current.contains(e.target as Node)) {
+        setNavDropdownOpen(false);
+      }
+      if (sectionDropdownRef.current && !sectionDropdownRef.current.contains(e.target as Node)) {
+        setSectionDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2800);
   };
 
+  const handleSelectIndustry = (industry: IndustryId, scrollToSection = false) => {
+    setSelectedIndustry(industry);
+    setWaitlistOrg(INDUSTRIES[industry].name);
+    setSelectedItemId(null);
+    setNavDropdownOpen(false);
+    setSectionDropdownOpen(false);
+    trackEvent('select_industry', { industry });
+    showToast(`Loaded ${INDUSTRIES[industry].name} inventory preset`);
+    if (scrollToSection) {
+      document.getElementById('industries')?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleScreenChange = (screen: ScreenTab) => {
+    setActiveScreen(screen);
+    trackEvent('select_preview_screen', { screen, industry: selectedIndustry });
+  };
+
   const toggleItemStatus = (id: string) => {
-    setItems((prev) =>
-      prev.map((item) => {
+    setItemsByIndustry((prev) => ({
+      ...prev,
+      [selectedIndustry]: prev[selectedIndustry].map((item) => {
         if (item.id !== id) return item;
         const nextStatus = item.status === 'Available' ? 'Checked Out' : 'Available';
+        trackEvent('demo_inventory_toggle', {
+          industry: selectedIndustry,
+          item_name: item.name,
+          next_status: nextStatus,
+        });
         showToast(
           nextStatus === 'Checked Out'
-            ? `Checked out ${item.name} to Sgt. J. Mercer`
-            : `Returned ${item.name} to Armory`
+            ? `Checked out ${item.name} to ${currentProfile.defaultHolder}`
+            : `Returned ${item.name} to ${currentProfile.returnLocation}`
         );
         return {
           ...item,
           status: nextStatus,
-          assignedTo: nextStatus === 'Checked Out' ? 'Sgt. J. Mercer' : 'Armory Rack A4',
+          assignedTo:
+            nextStatus === 'Checked Out'
+              ? currentProfile.defaultHolder
+              : currentProfile.returnLocation,
           updatedAgo: 'Just now',
         };
-      })
-    );
+      }),
+    }));
   };
 
   const handleQuickScan = () => {
     const target = items.find((i) => i.status === 'Available') || items[0];
+    trackEvent('demo_camera_scan', { industry: selectedIndustry, item_name: target.name });
     toggleItemStatus(target.id);
+  };
+
+  const handleWaitlistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waitlistEmail || waitlistSubmitting) return;
+    setWaitlistSubmitting(true);
+    await submitWaitlistEntry(waitlistEmail, waitlistOrg);
+    setWaitlistSubmitting(false);
+    setWaitlistSubmitted(true);
   };
 
   const filteredPhoneItems = items.filter(
@@ -126,6 +444,17 @@ export function App() {
       i.tag.toLowerCase().includes(phoneSearch.toLowerCase()) ||
       i.assignedTo.toLowerCase().includes(phoneSearch.toLowerCase())
   );
+
+  const getIndustryIcon = (id: IndustryId) => {
+    switch (id) {
+      case 'DEFENSE':
+        return <Shield className="w-4 h-4" />;
+      case 'LAW_ENFORCEMENT':
+        return <BadgeCheck className="w-4 h-4" />;
+      case 'AVIATION':
+        return <Plane className="w-4 h-4" />;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#060606] text-white bg-minimal-grid relative">
@@ -144,33 +473,97 @@ export function App() {
                 GOVROUTE
               </div>
               <div className="font-mono text-[9px] tracking-[0.16em] text-neutral-500 uppercase mt-0.5">
-                SIMPLE INVENTORY FOR MILITARY & POLICE
+                DEFENSE · LAW ENFORCEMENT · AVIATION
               </div>
             </div>
           </a>
 
-          {/* Center Numbered Links */}
-          <nav className="hidden lg:flex items-center gap-12 font-mono text-[11px] tracking-[0.18em] text-neutral-400 uppercase">
+          {/* Center Numbered Links + Industries Dropdown */}
+          <nav className="hidden lg:flex items-center gap-11 font-mono text-[11px] tracking-[0.18em] text-neutral-400 uppercase">
             <a href="#preview" className="hover:text-white transition-colors leading-relaxed">
               <span className="block text-neutral-500">01. THE</span>
               <span>APP</span>
             </a>
+
             <a href="#features" className="hover:text-white transition-colors leading-relaxed">
               <span className="block text-neutral-500">02. BUILT FOR</span>
               <span>SPEED</span>
             </a>
+
+            {/* 03. INDUSTRIES DROPDOWN */}
+            <div className="relative" ref={navDropdownRef}>
+              <button
+                onClick={() => setNavDropdownOpen((prev) => !prev)}
+                className="hover:text-white transition-colors leading-relaxed text-left uppercase cursor-pointer flex items-end gap-1.5 group"
+              >
+                <div>
+                  <span className="block text-neutral-500">03. SELECT</span>
+                  <span className="text-white">INDUSTRIES ({currentProfile.name})</span>
+                </div>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 mb-0.5 text-neutral-400 transition-transform ${
+                    navDropdownOpen ? 'rotate-180 text-white' : ''
+                  }`}
+                />
+              </button>
+
+              {navDropdownOpen && (
+                <div className="absolute left-0 mt-4 w-72 rounded-2xl bg-[#0C0C0E] border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2 z-50">
+                  <div className="px-3 py-2 text-[9px] font-mono tracking-[0.2em] text-neutral-500 uppercase border-b border-white/[0.06]">
+                    SELECT SECTOR TO PREVIEW
+                  </div>
+                  {(Object.keys(INDUSTRIES) as IndustryId[]).map((id, idx) => {
+                    const ind = INDUSTRIES[id];
+                    const active = selectedIndustry === id;
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => handleSelectIndustry(id, true)}
+                        className={`w-full text-left px-3.5 py-3 rounded-xl transition-all flex items-start justify-between gap-3 cursor-pointer mt-1 ${
+                          active
+                            ? 'bg-white text-black'
+                            : 'text-white hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span
+                            className={`mt-0.5 ${
+                              active ? 'text-black' : 'text-neutral-400'
+                            }`}
+                          >
+                            {getIndustryIcon(id)}
+                          </span>
+                          <div>
+                            <div className="font-mono text-xs font-bold tracking-wider uppercase">
+                              0{idx + 1}. {ind.name}
+                            </div>
+                            <div
+                              className={`text-[10px] tracking-normal normal-case font-sans mt-0.5 ${
+                                active ? 'text-neutral-700' : 'text-neutral-400'
+                              }`}
+                            >
+                              {ind.shortTag}
+                            </div>
+                          </div>
+                        </div>
+                        {active && <Check className="w-3.5 h-3.5 shrink-0 mt-1" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
             <a href="#workflow" className="hover:text-white transition-colors leading-relaxed">
-              <span className="block text-neutral-500">03. HOW IT</span>
+              <span className="block text-neutral-500">04. HOW IT</span>
               <span>WORKS</span>
             </a>
-            <a href="#workflow" className="hover:text-white transition-colors leading-relaxed">
-              <span className="block text-neutral-500">04. FIELD</span>
-              <span>TEAMS</span>
-            </a>
+
             <button
               onClick={() => {
                 setWaitlistSubmitted(false);
                 setWaitlistOpen(true);
+                trackEvent('open_waitlist_modal', { location: 'navbar_contact' });
               }}
               className="hover:text-white transition-colors leading-relaxed text-left uppercase cursor-pointer"
             >
@@ -184,6 +577,7 @@ export function App() {
             onClick={() => {
               setWaitlistSubmitted(false);
               setWaitlistOpen(true);
+              trackEvent('open_waitlist_modal', { location: 'navbar_cta' });
             }}
             className="bg-white hover:bg-neutral-200 text-black rounded-xl px-6 py-3 font-mono text-[11px] font-semibold tracking-[0.18em] uppercase flex items-center gap-3 transition-colors cursor-pointer"
           >
@@ -205,7 +599,7 @@ export function App() {
             {/* Top Rounded Pill Badge */}
             <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-white/[0.12] bg-[#0C0C0E] font-mono text-[10px] sm:text-[11px] tracking-[0.2em] text-neutral-300 uppercase mb-9">
               <span className="w-2 h-2 rounded-full bg-white" />
-              <span>ZERO TRAINING REQUIRED · MILITARY & LAW ENFORCEMENT · iOS & ANDROID</span>
+              <span>DEFENSE · LAW ENFORCEMENT · AVIATION · iOS & ANDROID</span>
             </div>
 
             {/* Classical Serif Headline with Italic Muted Contrast */}
@@ -218,15 +612,41 @@ export function App() {
             {/* Calm, User-Friendly Description Paragraph */}
             <p className="mt-8 text-neutral-400 text-base sm:text-[19px] leading-[1.68] font-light max-w-[640px]">
               GOVROUTE replaces messy clipboards, paper sign-out sheets, and clunky spreadsheets
-              with a clean mobile app your entire unit or precinct can use on day one. Scan any item
-              with your phone camera, check out gear in a single tap, and see who has what in
-              seconds.
+              with a clean mobile app your entire team can use on day one. Whether managing an
+              armory, a police precinct, or an aviation hangar tool crib—scan any item with your
+              phone camera and see who has what in seconds.
             </p>
 
+            {/* Quick Industry Switcher Bar right above the Phone Screen Selector */}
+            <div className="mt-10 max-w-[650px] flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[10px] tracking-[0.18em] text-neutral-500 uppercase mr-2">
+                PREVIEW INDUSTRY:
+              </span>
+              {(Object.keys(INDUSTRIES) as IndustryId[]).map((id) => {
+                const active = selectedIndustry === id;
+                return (
+                  <button
+                    key={id}
+                    onClick={() => handleSelectIndustry(id, false)}
+                    className={`px-3.5 py-1.5 rounded-full font-mono text-[11px] tracking-[0.14em] uppercase transition-all cursor-pointer border flex items-center gap-1.5 ${
+                      active
+                        ? 'bg-white text-black border-white font-semibold'
+                        : 'bg-[#0C0C0E] text-neutral-400 border-white/10 hover:border-white/30 hover:text-white'
+                    }`}
+                  >
+                    {getIndustryIcon(id)}
+                    <span>{INDUSTRIES[id].name}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Interactive Live Preview Selector Header */}
-            <div className="mt-14 pt-2 max-w-[650px]">
+            <div className="mt-8 pt-2 max-w-[650px]">
               <div className="flex items-center justify-between font-mono text-[10px] sm:text-[11px] tracking-[0.2em] text-neutral-500 uppercase mb-4">
-                <span>INTERACTIVE LIVE APP PREVIEW — SELECT SCREEN:</span>
+                <span>
+                  INTERACTIVE {currentProfile.name.toUpperCase()} PREVIEW — SELECT SCREEN:
+                </span>
                 <span className="hidden sm:inline text-neutral-500">
                   CLICK INSIDE DEVICE TO INTERACT →
                 </span>
@@ -271,7 +691,7 @@ export function App() {
                   return (
                     <button
                       key={tab.id}
-                      onClick={() => setActiveScreen(tab.id)}
+                      onClick={() => handleScreenChange(tab.id)}
                       className={`text-left rounded-2xl p-4 transition-all cursor-pointer border flex flex-col justify-between min-h-[126px] ${
                         isActive
                           ? 'bg-white text-black border-white shadow-[0_0_30px_rgba(255,255,255,0.12)]'
@@ -333,14 +753,21 @@ export function App() {
                       <div className="w-9 h-9 rounded-full border border-white/25 bg-[#121215] flex items-center justify-center font-mono text-[11px] font-bold tracking-tighter text-white">
                         GR
                       </div>
-                      <span className="text-lg font-medium tracking-tight text-white">
-                        {activeScreen === 'HOME' && 'Home'}
-                        {activeScreen === 'INVENTORY' && 'Equipment'}
-                        {activeScreen === 'SCAN' && 'Quick Scan'}
-                        {activeScreen === 'TEAM' && 'Shift Roster'}
-                      </span>
+                      <div>
+                        <span className="text-base font-medium tracking-tight text-white block leading-none">
+                          {activeScreen === 'HOME' && 'Home'}
+                          {activeScreen === 'INVENTORY' && 'Equipment'}
+                          {activeScreen === 'SCAN' && 'Quick Scan'}
+                          {activeScreen === 'TEAM' && 'Shift Roster'}
+                        </span>
+                        <span className="text-[10px] font-mono text-neutral-500 uppercase">
+                          {currentProfile.name} Mode
+                        </span>
+                      </div>
                     </div>
-                    <span className="text-xs text-neutral-500 font-normal">Unit 04</span>
+                    <span className="text-xs text-neutral-400 font-normal">
+                      {currentProfile.unitLabel}
+                    </span>
                   </div>
                 </div>
 
@@ -360,7 +787,7 @@ export function App() {
                       {/* 2 Top Metric Cards */}
                       <div className="grid grid-cols-2 gap-3">
                         <div
-                          onClick={() => setActiveScreen('INVENTORY')}
+                          onClick={() => handleScreenChange('INVENTORY')}
                           className="bg-[#121214] hover:bg-[#17171A] transition-colors border border-white/[0.07] rounded-2xl p-4 cursor-pointer"
                         >
                           <Package className="w-4 h-4 text-neutral-400 mb-3" />
@@ -369,7 +796,7 @@ export function App() {
                         </div>
 
                         <div
-                          onClick={() => setActiveScreen('SCAN')}
+                          onClick={() => handleScreenChange('SCAN')}
                           className="bg-[#121214] hover:bg-[#17171A] transition-colors border border-white/[0.07] rounded-2xl p-4 cursor-pointer"
                         >
                           <Clock className="w-4 h-4 text-neutral-400 mb-3" />
@@ -393,8 +820,8 @@ export function App() {
                           />
                         </div>
                         <div className="flex items-center justify-between text-[11px] text-neutral-500 mt-3">
-                          <span>Ready in Room: {availableCount}</span>
-                          <span>On Patrol / Field: {checkedOutCount}</span>
+                          <span>Ready in Crib/Room: {availableCount}</span>
+                          <span>Issued Out: {checkedOutCount}</span>
                         </div>
                       </div>
 
@@ -448,7 +875,7 @@ export function App() {
                           type="text"
                           value={phoneSearch}
                           onChange={(e) => setPhoneSearch(e.target.value)}
-                          placeholder="Search gear, tag, or officer..."
+                          placeholder="Search item, tag, or holder..."
                           className="w-full bg-[#121214] border border-white/[0.08] rounded-xl pl-9 pr-3 py-2.5 text-xs text-white placeholder:text-neutral-500 focus:outline-none focus:border-white/30"
                         />
                       </div>
@@ -536,7 +963,9 @@ export function App() {
                       <div className="bg-[#121214] border border-white/[0.07] rounded-2xl p-4 space-y-2.5 text-xs">
                         <div className="flex justify-between text-neutral-400">
                           <span>Logged-In User</span>
-                          <span className="text-white font-medium">Sgt. J. Mercer</span>
+                          <span className="text-white font-medium">
+                            {currentProfile.defaultHolder}
+                          </span>
                         </div>
                         <div className="flex justify-between text-neutral-400">
                           <span>Scan Mode</span>
@@ -554,12 +983,10 @@ export function App() {
                   {activeScreen === 'TEAM' && (
                     <div className="space-y-3">
                       <div className="bg-[#121214] border border-white/[0.07] rounded-2xl p-4 space-y-3">
-                        <div className="text-xs font-medium text-white">On-Duty Shift Roster</div>
-                        {[
-                          { name: 'Sgt. M. Vance', role: 'Squad Leader', count: '1 item out' },
-                          { name: 'Ofc. K. Alverez', role: 'Patrol Unit 14', count: '1 item out' },
-                          { name: 'Sgt. J. Mercer', role: 'Armory Lead', count: 'All returned' },
-                        ].map((member) => (
+                        <div className="text-xs font-medium text-white">
+                          On-Duty {currentProfile.name} Roster
+                        </div>
+                        {currentProfile.roster.map((member) => (
                           <div
                             key={member.name}
                             className="flex items-center justify-between pt-2 border-t border-white/[0.06] text-xs"
@@ -581,7 +1008,7 @@ export function App() {
                             End-of-Shift Reminders
                           </div>
                           <div className="text-[11px] text-neutral-500 mt-0.5">
-                            Notify officers when gear is still out
+                            Notify team when equipment is still out
                           </div>
                         </div>
                         <button
@@ -624,7 +1051,10 @@ export function App() {
                       </div>
 
                       <button
-                        onClick={() => showToast('Shift inventory PDF report downloaded.')}
+                        onClick={() => {
+                          trackEvent('export_shift_report', { industry: selectedIndustry });
+                          showToast(`${currentProfile.name} shift report PDF downloaded.`);
+                        }}
                         className="w-full py-3 rounded-xl border border-white/20 hover:bg-white hover:text-black text-white font-mono text-[11px] uppercase tracking-wider transition-colors cursor-pointer"
                       >
                         Export 1-Click Shift Report
@@ -648,7 +1078,7 @@ export function App() {
                     return (
                       <button
                         key={nav.id}
-                        onClick={() => setActiveScreen(nav.id)}
+                        onClick={() => handleScreenChange(nav.id)}
                         className={`flex flex-col items-center gap-1 py-1 cursor-pointer transition-colors ${
                           active ? 'text-white' : 'text-neutral-600 hover:text-neutral-400'
                         }`}
@@ -685,17 +1115,17 @@ export function App() {
             {
               num: '01',
               title: 'Zero Training Required',
-              desc: 'Designed like a modern consumer app—not a 1990s government database. Any officer or soldier can learn it in 60 seconds.',
+              desc: 'Designed like a modern consumer app—not a 1990s government database. Any officer, soldier, or aviation tech can learn it in 60 seconds.',
             },
             {
               num: '02',
               title: '1-Tap Check-In & Out',
-              desc: 'Scan a barcode with your phone camera and tap once to assign rifles, radios, vehicles, or medical kits.',
+              desc: 'Scan a barcode with your phone camera and tap once to assign rifles, radios, patrol vehicles, or calibrated hangar tools.',
             },
             {
               num: '03',
               title: 'Instant Who-Has-What',
-              desc: 'Type any serial number, vehicle unit, or officer name to see exactly who has an item and when it was checked out.',
+              desc: 'Type any serial number, tail number, vehicle unit, or team member name to see exactly who has an item and when it was checked out.',
             },
             {
               num: '04',
@@ -719,7 +1149,127 @@ export function App() {
         </div>
       </section>
 
-      {/* SECTION 03: EVERYDAY WORKFLOW */}
+      {/* SECTION 03: INDUSTRIES DROPDOWN & SECTOR BENEFITS (DEFENSE, LAW ENFORCEMENT, AVIATION) */}
+      <section
+        id="industries"
+        className="border-t border-white/[0.08] py-24 max-w-[1340px] mx-auto px-6 sm:px-10"
+      >
+        {/* Top Row: Section Label + Interactive Industry Dropdown Selector */}
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-14">
+          <div className="max-w-2xl">
+            <div className="font-mono text-[11px] tracking-[0.22em] text-neutral-500 uppercase mb-4">
+              03. SECTORS WE SERVE — {currentProfile.name.toUpperCase()}
+            </div>
+            <h2 className="font-serif-editorial text-4xl sm:text-5xl lg:text-[56px] text-white font-normal leading-[1.08]">
+              {currentProfile.headline}{' '}
+              <span className="italic text-neutral-400">{currentProfile.headlineItalic}</span>
+            </h2>
+            <p className="mt-5 text-neutral-400 text-base sm:text-lg leading-relaxed font-light">
+              {currentProfile.summary}
+            </p>
+          </div>
+
+          {/* Interactive Sector Dropdown Control */}
+          <div className="relative shrink-0" ref={sectionDropdownRef}>
+            <div className="font-mono text-[10px] tracking-[0.2em] text-neutral-500 uppercase mb-2">
+              CHOOSE INDUSTRY SECTOR:
+            </div>
+            <button
+              onClick={() => setSectionDropdownOpen((prev) => !prev)}
+              className="w-full sm:w-72 bg-white text-black rounded-2xl px-5 py-4 font-mono text-xs font-bold tracking-[0.16em] uppercase flex items-center justify-between gap-4 cursor-pointer shadow-[0_0_30px_rgba(255,255,255,0.12)]"
+            >
+              <span className="flex items-center gap-2.5">
+                {getIndustryIcon(selectedIndustry)}
+                <span>{currentProfile.name}</span>
+              </span>
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${
+                  sectionDropdownOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {sectionDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-full sm:w-80 rounded-2xl bg-[#0C0C0E] border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2 z-30">
+                {(Object.keys(INDUSTRIES) as IndustryId[]).map((id, idx) => {
+                  const ind = INDUSTRIES[id];
+                  const active = selectedIndustry === id;
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => handleSelectIndustry(id, false)}
+                      className={`w-full text-left px-4 py-3.5 rounded-xl transition-all flex items-start justify-between gap-3 cursor-pointer mt-1 first:mt-0 ${
+                        active ? 'bg-white text-black' : 'text-white hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span className={`mt-0.5 ${active ? 'text-black' : 'text-neutral-400'}`}>
+                          {getIndustryIcon(id)}
+                        </span>
+                        <div>
+                          <div className="font-mono text-xs font-bold tracking-wider uppercase">
+                            0{idx + 1}. {ind.name}
+                          </div>
+                          <div
+                            className={`text-xs mt-0.5 ${
+                              active ? 'text-neutral-700' : 'text-neutral-400'
+                            }`}
+                          >
+                            {ind.shortTag}
+                          </div>
+                        </div>
+                      </div>
+                      {active && <Check className="w-4 h-4 shrink-0 mt-0.5" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 4 Tailored Benefits Cards for the Selected Sector */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          {currentProfile.benefits.map((benefit) => (
+            <div
+              key={benefit.num}
+              className="bg-[#0B0B0D] border border-white/[0.09] rounded-2xl p-7 flex flex-col justify-between min-h-[240px]"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-xs text-neutral-500">{benefit.num}</span>
+                <span className="font-mono text-[10px] tracking-widest uppercase text-neutral-500">
+                  {currentProfile.name}
+                </span>
+              </div>
+              <div className="mt-6">
+                <h3 className="font-mono text-sm font-semibold tracking-wider uppercase text-white mb-2.5">
+                  {benefit.title}
+                </h3>
+                <p className="text-sm text-neutral-400 leading-relaxed font-light">
+                  {benefit.desc}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Sector Impact Strip + Button to test in phone preview */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {currentProfile.metrics.map((m) => (
+            <div
+              key={m.label}
+              className="bg-[#0B0B0D] border border-white/[0.07] rounded-2xl p-5"
+            >
+              <div className="font-mono text-[10px] tracking-[0.18em] text-neutral-500 uppercase">
+                {m.label}
+              </div>
+              <div className="font-mono text-sm text-white mt-2 font-medium">{m.value}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* SECTION 04: EVERYDAY WORKFLOW */}
       <section
         id="workflow"
         className="border-t border-white/[0.08] py-24 max-w-[1340px] mx-auto px-6 sm:px-10"
@@ -727,16 +1277,16 @@ export function App() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           <div className="lg:col-span-6 space-y-6">
             <div className="font-mono text-[11px] tracking-[0.22em] text-neutral-500 uppercase">
-              03. GOODBYE CLIPBOARDS & SPREADSHEETS
+              04. GOODBYE CLIPBOARDS & SPREADSHEETS
             </div>
             <h2 className="font-serif-editorial text-4xl sm:text-5xl text-white font-normal leading-tight">
               Turn a two-hour gear count into a{' '}
               <span className="italic text-neutral-400">two-minute walk-through.</span>
             </h2>
             <p className="text-neutral-400 text-base leading-relaxed font-light max-w-xl">
-              Whether you are running morning shift change at a busy police precinct or managing
-              equipment across a battalion armory, GovRoute gets your people out of the supply room
-              and back to the mission.
+              Whether you are running morning roll call at a police precinct, managing a battalion
+              armory, or checking out calibrated tools on the flight line, GovRoute gets your people
+              out of the supply room and back to the mission.
             </p>
           </div>
 
@@ -764,12 +1314,13 @@ export function App() {
       {/* MINIMALIST FOOTER */}
       <footer className="border-t border-white/[0.08] py-12">
         <div className="max-w-[1340px] mx-auto px-6 sm:px-10 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-[11px] tracking-[0.16em] text-neutral-500 uppercase">
-          <div>GOVROUTE INC. · VETERAN-FOUNDED · BUILT FOR MILITARY & LAW ENFORCEMENT</div>
+          <div>GOVROUTE INC. · DEFENSE · LAW ENFORCEMENT · AVIATION</div>
           <div className="flex items-center gap-6">
             <button
               onClick={() => {
                 setWaitlistSubmitted(false);
                 setWaitlistOpen(true);
+                trackEvent('open_waitlist_modal', { location: 'footer_cta' });
               }}
               className="hover:text-white transition-colors uppercase cursor-pointer"
             >
@@ -808,13 +1359,7 @@ export function App() {
                 </button>
               </div>
             ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setWaitlistSubmitted(true);
-                }}
-                className="space-y-5"
-              >
+              <form onSubmit={handleWaitlistSubmit} className="space-y-5">
                 <div className="font-mono text-[10px] tracking-[0.2em] text-neutral-500 uppercase">
                   EARLY ACCESS
                 </div>
@@ -822,23 +1367,26 @@ export function App() {
                   Join the GovRoute Waitlist
                 </h3>
                 <p className="text-xs text-neutral-400 font-light leading-relaxed">
-                  Get early access for your military unit or law enforcement department. Set up
-                  takes less than 5 minutes.
+                  Get early access for your Defense unit, Law Enforcement department, or Aviation
+                  operation. Setup takes less than 5 minutes.
                 </p>
 
                 <div>
                   <label className="block font-mono text-[10px] tracking-widest uppercase text-neutral-400 mb-2">
-                    TEAM / DEPARTMENT
+                    INDUSTRY SECTOR
                   </label>
                   <select
                     value={waitlistOrg}
                     onChange={(e) => setWaitlistOrg(e.target.value)}
                     className="w-full bg-[#141417] border border-white/10 rounded-xl px-3.5 py-3 text-xs text-white focus:outline-none focus:border-white/30"
                   >
-                    <option>Law Enforcement Department</option>
-                    <option>Military Unit / Armory</option>
-                    <option>National Guard / Reserve</option>
-                    <option>Federal / State Agency</option>
+                    <option value="Defense">Defense (Military Units, Armories & Base Ops)</option>
+                    <option value="Law Enforcement">
+                      Law Enforcement (Police Precincts, Patrol & SWAT)
+                    </option>
+                    <option value="Aviation">
+                      Aviation (Hangar Tool Cribs, Flight Line & MRO)
+                    </option>
                   </select>
                 </div>
 
@@ -851,16 +1399,17 @@ export function App() {
                     required
                     value={waitlistEmail}
                     onChange={(e) => setWaitlistEmail(e.target.value)}
-                    placeholder="you@department.gov"
+                    placeholder="you@organization.gov"
                     className="w-full bg-[#141417] border border-white/10 rounded-xl px-3.5 py-3 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white/30"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-3.5 rounded-xl bg-white hover:bg-neutral-200 text-black font-mono text-xs font-semibold tracking-[0.16em] uppercase transition-colors cursor-pointer"
+                  disabled={waitlistSubmitting}
+                  className="w-full py-3.5 rounded-xl bg-white hover:bg-neutral-200 disabled:opacity-50 text-black font-mono text-xs font-semibold tracking-[0.16em] uppercase transition-colors cursor-pointer"
                 >
-                  Join Waitlist ↗
+                  {waitlistSubmitting ? 'Submitting...' : 'Join Waitlist ↗'}
                 </button>
               </form>
             )}

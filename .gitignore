@@ -1,1 +1,28 @@
+# Dependencies
 node_modules
+.pnp
+.pnp.js
+
+# Build outputs (never commit compiled bundles)
+dist
+dist-ssr
+*.local
+tsconfig.tsbuildinfo
+
+# Environment variables & secrets (NEVER COMMIT)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*
+!.env.example
+
+# Firebase & IDE caches
+.firebase
+firebase-debug.log*
+firestore-debug.log*
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
