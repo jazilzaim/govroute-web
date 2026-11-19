@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#060606" />
+  <rect x="52" y="52" width="408" height="408" rx="90" fill="#FFFFFF" />
+  <rect x="104" y="104" width="304" height="304" rx="54" fill="none" stroke="#060606" stroke-width="20" />
+  <text
+    x="256"
+    y="302"
+    text-anchor="middle"
+    fill="#060606"
+    font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+    font-size="148"
+    font-weight="700"
+    letter-spacing="-6"
+  >GR</text>
+</svg>

@@ -8,7 +8,9 @@ import {
   Check,
   Search,
   QrCode,
-  Wifi,
+  Globe,
+  Lock,
+  Download,
   Package,
   Clock,
   ChevronDown,
@@ -24,6 +26,7 @@ import { trackEvent, submitWaitlistEntry } from './lib/firebase';
 import { useAuth } from './context/AuthContext';
 import { AuthModal, type AuthModalMode } from './components/AuthModal';
 import { DashboardWorkspace } from './components/DashboardWorkspace';
+import { usePwaInstall } from './hooks/usePwaInstall';
 
 type ScreenTab = 'HOME' | 'INVENTORY' | 'SCAN' | 'TEAM';
 type IndustryId = 'DEFENSE' | 'LAW_ENFORCEMENT' | 'AVIATION';
@@ -65,7 +68,7 @@ const INDUSTRIES: Record<IndustryId, IndustryProfile> = {
     headline: 'Built for the armory, supply room, and',
     headlineItalic: 'daily unit operations.',
     summary:
-      'Replace paper hand-receipts and multi-hour equipment counts with a mobile app every service member and supply specialist can use immediately—whether in the armory or out on training.',
+      'Replace paper hand-receipts and multi-hour equipment counts with an installable web app every service member and supply specialist can launch in any browser—whether in the armory or out on training.',
     roster: [
       { name: 'Sgt. M. Vance', role: '1st Squad Leader', count: '1 item out' },
       { name: 'Cpl. A. Thorne', role: 'Comms Specialist', count: '1 item out' },
@@ -75,7 +78,7 @@ const INDUSTRIES: Record<IndustryId, IndustryProfile> = {
       {
         num: '01',
         title: 'Rapid Sensitive-Item Counts',
-        desc: 'Complete 100% serialized weapon, optic, and night-vision inventory sweeps in minutes using any smartphone camera.',
+        desc: 'Complete 100% serialized weapon, optic, and night-vision inventory sweeps in minutes using any browser-enabled device camera.',
       },
       {
         num: '02',
@@ -84,8 +87,8 @@ const INDUSTRIES: Record<IndustryId, IndustryProfile> = {
       },
       {
         num: '03',
-        title: '100% Offline Field Mode',
-        desc: 'Keep checking gear in and out during austere training exercises or deployments with zero cell or Wi-Fi connectivity.',
+        title: '100% Offline PWA Mode',
+        desc: 'Keep checking gear in and out during austere training exercises or deployments with offline service-worker caching.',
       },
       {
         num: '04',
@@ -281,7 +284,7 @@ const INDUSTRIES: Record<IndustryId, IndustryProfile> = {
       { label: 'FOD CLEARANCE CHECK', value: '100% Tail-Number Linked' },
       { label: 'CALIBRATION TRACKING', value: 'Automated Due-Date Alerts' },
       { label: 'GEAR TRACKED', value: 'Tool Cribs, Rotables & GSE' },
-      { label: 'DEVICE SUPPORT', value: 'Hangar iPads & Mobile Phones' },
+      { label: 'DEVICE SUPPORT', value: 'Any Browser · Installable PWA' },
     ],
     sampleItems: [
       {
@@ -335,6 +338,7 @@ const INDUSTRIES: Record<IndustryId, IndustryProfile> = {
 
 export function App() {
   const { user, loading: authLoading, signOut } = useAuth();
+  const { canInstall, isInstalled, promptInstall } = usePwaInstall();
 
   const [selectedIndustry, setSelectedIndustry] = useState<IndustryId>('DEFENSE');
   const [navDropdownOpen, setNavDropdownOpen] = useState(false);
@@ -439,6 +443,16 @@ export function App() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 2800);
+  };
+
+  const handleInstallPwa = async () => {
+    const outcome = await promptInstall();
+    trackEvent('pwa_install_click', { outcome });
+    if (outcome === 'accepted') {
+      showToast('GovRoute PWA installed');
+    } else if (outcome === 'unavailable') {
+      showToast('Use your browser menu to Install App / Add to Home Screen');
+    }
   };
 
   const handleSelectIndustry = (industry: IndustryId, scrollToSection = false) => {
@@ -814,10 +828,30 @@ export function App() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-start">
           {/* LEFT COLUMN: Editorial Headline, User-Friendly Copy & Screen Selector Cards */}
           <div className="lg:col-span-7 pt-2">
-            {/* Top Rounded Pill Badge */}
-            <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-white/[0.12] bg-[#0C0C0E] font-mono text-[10px] sm:text-[11px] tracking-[0.2em] text-neutral-300 uppercase mb-9">
-              <span className="w-2 h-2 rounded-full bg-white" />
-              <span>DEFENSE · LAW ENFORCEMENT · AVIATION · iOS & ANDROID</span>
+            {/* Top Rounded Pill Badge + Optional PWA Install Button */}
+            <div className="flex flex-wrap items-center gap-3 mb-9">
+              <div className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full border border-white/[0.12] bg-[#0C0C0E] font-mono text-[10px] sm:text-[11px] tracking-[0.2em] text-neutral-300 uppercase">
+                <span className="w-2 h-2 rounded-full bg-white" />
+                <span>DEFENSE · LAW ENFORCEMENT · AVIATION · WEB APP (PWA)</span>
+              </div>
+
+              {canInstall && (
+                <button
+                  type="button"
+                  onClick={handleInstallPwa}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-white hover:bg-neutral-200 text-black font-mono text-[10px] font-semibold tracking-[0.16em] uppercase transition-colors cursor-pointer"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>Install PWA</span>
+                </button>
+              )}
+
+              {isInstalled && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full border border-emerald-400/25 bg-emerald-400/10 font-mono text-[10px] tracking-[0.16em] text-emerald-300 uppercase">
+                  <Check className="w-3 h-3" />
+                  <span>PWA Installed</span>
+                </div>
+              )}
             </div>
 
             {/* Classical Serif Headline with Italic Muted Contrast */}
@@ -830,12 +864,13 @@ export function App() {
             {/* Calm, User-Friendly Description Paragraph */}
             <p className="mt-8 text-neutral-400 text-base sm:text-[19px] leading-[1.68] font-light max-w-[640px]">
               GOVROUTE replaces messy clipboards, paper sign-out sheets, and clunky spreadsheets
-              with a clean mobile app your entire team can use on day one. Whether managing an
-              armory, a police precinct, or an aviation hangar tool crib—scan any item with your
-              phone camera and see who has what in seconds.
+              with a fast, installable Progressive Web App your entire team can launch in any
+              browser on day one—no app store required. Whether managing an armory, a police
+              precinct, or an aviation hangar tool crib, scan any item with your device camera and
+              see who has what in seconds.
             </p>
 
-            {/* Quick Industry Switcher Bar right above the Phone Screen Selector */}
+            {/* Quick Industry Switcher Bar right above the Web App Screen Selector */}
             <div className="mt-10 max-w-[650px] flex flex-wrap items-center gap-2">
               <span className="font-mono text-[10px] tracking-[0.18em] text-neutral-500 uppercase mr-2">
                 PREVIEW INDUSTRY:
@@ -863,14 +898,14 @@ export function App() {
             <div className="mt-8 pt-2 max-w-[650px]">
               <div className="flex items-center justify-between font-mono text-[10px] sm:text-[11px] tracking-[0.2em] text-neutral-500 uppercase mb-4">
                 <span>
-                  INTERACTIVE {currentProfile.name.toUpperCase()} PREVIEW — SELECT SCREEN:
+                  INTERACTIVE {currentProfile.name.toUpperCase()} PWA — SELECT VIEW:
                 </span>
                 <span className="hidden sm:inline text-neutral-500">
-                  CLICK INSIDE DEVICE TO INTERACT →
+                  CLICK INSIDE WEB APP TO INTERACT →
                 </span>
               </div>
 
-              {/* 4 Selector Cards matching the reference image */}
+              {/* 4 Selector Cards */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {(
                   [
@@ -946,29 +981,53 @@ export function App() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Interactive Minimalist iPhone Frame */}
+          {/* RIGHT COLUMN: Interactive Minimalist Progressive Web App Frame */}
           <div className="lg:col-span-5 flex justify-center lg:justify-end">
-            <div className="w-full max-w-[400px] rounded-[54px] p-[11px] bg-gradient-to-b from-[#2A2A2E] via-[#1B1B1E] to-[#121214] shadow-[0_25px_90px_rgba(0,0,0,0.85)] border border-white/10">
-              {/* Inner Screen Bezel */}
-              <div className="bg-[#09090B] rounded-[44px] h-[720px] flex flex-col justify-between overflow-hidden border border-black relative">
-                {/* Top iOS Status Bar + Dynamic Island */}
+            <div className="w-full max-w-[440px] rounded-[28px] p-[1px] bg-gradient-to-b from-white/20 via-white/[0.08] to-white/[0.04] shadow-[0_25px_90px_rgba(0,0,0,0.85)]">
+              {/* Inner PWA Window Shell */}
+              <div className="bg-[#09090B] rounded-[27px] h-[680px] flex flex-col justify-between overflow-hidden relative">
+                {/* Top Minimalist Web App / PWA Chrome Bar */}
                 <div>
-                  <div className="px-7 pt-4 pb-2 flex items-center justify-between text-xs font-medium text-white">
-                    <span className="tracking-tight font-semibold">5:02</span>
-                    <div className="w-24 h-6 bg-black rounded-full" />
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] tracking-widest text-neutral-400">••••</span>
-                      <Wifi className="w-3.5 h-3.5 text-white" />
-                      <div className="w-5 h-2.5 border border-white/60 rounded-[3px] p-[1px] flex items-center">
-                        <div className="w-full h-full bg-white rounded-[1px]" />
-                      </div>
+                  <div className="px-4 py-3 bg-[#0E0E11] border-b border-white/[0.07] flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
+                      <span className="w-2.5 h-2.5 rounded-full bg-white/15" />
                     </div>
+
+                    <div className="flex-1 max-w-[220px] px-3 py-1 rounded-lg bg-[#16161A] border border-white/[0.07] flex items-center justify-center gap-1.5 font-mono text-[10px] text-neutral-400 truncate">
+                      <Lock className="w-2.5 h-2.5 text-neutral-400 shrink-0" />
+                      <span className="truncate">govroute-app.web.app</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleInstallPwa}
+                      title={
+                        isInstalled
+                          ? 'Running as installed PWA'
+                          : 'Install GovRoute as a Progressive Web App'
+                      }
+                      className="px-2.5 py-1 rounded-lg border border-white/15 bg-white/[0.04] hover:bg-white hover:text-black text-neutral-300 font-mono text-[9px] tracking-[0.14em] uppercase flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                    >
+                      {isInstalled ? (
+                        <>
+                          <Globe className="w-2.5 h-2.5" />
+                          <span>PWA</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-2.5 h-2.5" />
+                          <span>Install</span>
+                        </>
+                      )}
+                    </button>
                   </div>
 
-                  {/* App Bar Inside Phone */}
-                  <div className="px-6 pt-3 pb-4 flex items-center justify-between border-b border-white/[0.06]">
+                  {/* App Bar Inside Web App */}
+                  <div className="px-6 pt-3.5 pb-4 flex items-center justify-between border-b border-white/[0.06]">
                     <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full border border-white/25 bg-[#121215] flex items-center justify-center font-mono text-[11px] font-bold tracking-tighter text-white">
+                      <div className="w-9 h-9 rounded-xl border border-white/25 bg-[#121215] flex items-center justify-center font-mono text-[11px] font-bold tracking-tighter text-white">
                         GR
                       </div>
                       <div>
@@ -978,8 +1037,9 @@ export function App() {
                           {activeScreen === 'SCAN' && 'Quick Scan'}
                           {activeScreen === 'TEAM' && 'Shift Roster'}
                         </span>
-                        <span className="text-[10px] font-mono text-neutral-500 uppercase">
-                          {currentProfile.name} Mode
+                        <span className="text-[10px] font-mono text-neutral-500 uppercase flex items-center gap-1.5 mt-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span>{currentProfile.name} · Offline-Ready PWA</span>
                         </span>
                       </div>
                     </div>
@@ -989,7 +1049,7 @@ export function App() {
                   </div>
                 </div>
 
-                {/* Toast notification inside phone */}
+                {/* Toast notification inside web app preview */}
                 {toastMessage && (
                   <div className="mx-5 mt-3 px-3.5 py-2.5 rounded-xl bg-white text-black text-xs font-medium flex items-center gap-2 shadow-lg">
                     <Check className="w-3.5 h-3.5 shrink-0" />
@@ -1166,8 +1226,8 @@ export function App() {
                           Point & Shoot Check-Out
                         </div>
                         <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">
-                          Point your phone camera at any barcode, QR sticker, or serial tag to check
-                          gear in or out in under a second.
+                          Point your device camera or barcode scanner at any QR sticker or serial
+                          tag to check gear in or out right in the browser.
                         </p>
 
                         <button
@@ -1338,7 +1398,7 @@ export function App() {
             {
               num: '02',
               title: '1-Tap Check-In & Out',
-              desc: 'Scan a barcode with your phone camera and tap once to assign rifles, radios, patrol vehicles, or calibrated hangar tools.',
+              desc: 'Scan a barcode with your device camera or USB/Bluetooth scanner and tap once to assign rifles, radios, patrol vehicles, or calibrated hangar tools.',
             },
             {
               num: '03',
@@ -1511,9 +1571,9 @@ export function App() {
           <div className="lg:col-span-6 grid grid-cols-2 gap-4">
             {[
               { label: 'SETUP TIME', value: 'Import CSV in 5 Minutes' },
-              { label: 'HARDWARE NEEDED', value: 'Any iPhone, iPad, or Android' },
+              { label: 'HARDWARE NEEDED', value: 'Any Browser · Installable PWA' },
               { label: 'CHECK-OUT SPEED', value: 'Under 2 Seconds per Item' },
-              { label: 'CELL SERVICE REQUIRED', value: 'Works 100% Offline in Field' },
+              { label: 'OFFLINE SUPPORT', value: 'Works Offline via PWA Cache' },
             ].map((spec) => (
               <div
                 key={spec.label}
