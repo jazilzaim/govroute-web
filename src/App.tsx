@@ -27,6 +27,8 @@ import { useAuth } from './context/AuthContext';
 import { AuthModal, type AuthModalMode } from './components/AuthModal';
 import { DashboardWorkspace } from './components/DashboardWorkspace';
 import { usePwaInstall } from './hooks/usePwaInstall';
+import { TacticalScene3D } from './components/TacticalScene3D';
+import { Tilt3DCard, Reveal3D, ScrollKeyframeHud } from './components/Spatial3D';
 
 type ScreenTab = 'HOME' | 'INVENTORY' | 'SCAN' | 'TEAM';
 type IndustryId = 'DEFENSE' | 'LAW_ENFORCEMENT' | 'AVIATION';
@@ -823,8 +825,14 @@ export function App() {
         />
       ) : (
         <>
+          <TacticalScene3D selectedIndustry={selectedIndustry} activeScreen={activeScreen} />
+          <ScrollKeyframeHud />
+
       {/* HERO SECTION */}
-      <main id="preview" className="max-w-[1340px] mx-auto px-6 sm:px-10 pt-14 pb-24 lg:pt-20">
+      <main
+        id="preview"
+        className="relative z-10 max-w-[1340px] mx-auto px-6 sm:px-10 pt-14 pb-24 lg:pt-20"
+      >
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-start">
           {/* LEFT COLUMN: Editorial Headline, User-Friendly Copy & Screen Selector Cards */}
           <div className="lg:col-span-7 pt-2">
@@ -981,11 +989,27 @@ export function App() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Interactive Minimalist Progressive Web App Frame */}
+          {/* RIGHT COLUMN: Interactive 3D Spatial Progressive Web App Frame */}
           <div className="lg:col-span-5 flex justify-center lg:justify-end">
-            <div className="w-full max-w-[440px] rounded-[28px] p-[1px] bg-gradient-to-b from-white/20 via-white/[0.08] to-white/[0.04] shadow-[0_25px_90px_rgba(0,0,0,0.85)]">
-              {/* Inner PWA Window Shell */}
-              <div className="bg-[#09090B] rounded-[27px] h-[680px] flex flex-col justify-between overflow-hidden relative">
+            <Tilt3DCard maxTilt={5} className="w-full max-w-[440px] rounded-[28px]">
+              {/* Floating 3D Depth Badge (Top-Left) */}
+              <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0E0E11]/90 backdrop-blur-md border border-white/15 shadow-[0_14px_40px_rgba(0,0,0,0.85)] absolute -left-8 top-14 z-20 pointer-events-none animate-float-3d">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span className="font-mono text-[9px] tracking-[0.18em] text-neutral-200 uppercase">
+                  {availableCount}/{items.length} READY
+                </span>
+              </div>
+
+              {/* Floating 3D Depth Badge (Bottom-Right) */}
+              <div className="hidden xl:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0E0E11]/90 backdrop-blur-md border border-white/15 shadow-[0_14px_40px_rgba(0,0,0,0.85)] absolute -right-6 bottom-20 z-20 pointer-events-none animate-float-3d-alt">
+                <span className="font-mono text-[9px] tracking-[0.18em] text-neutral-300 uppercase">
+                  SHA-256 · PWA CACHE
+                </span>
+              </div>
+
+              <div className="w-full rounded-[28px] p-[1px] bg-gradient-to-b from-white/25 via-white/[0.1] to-white/[0.04] shadow-[0_30px_100px_rgba(0,0,0,0.9)]">
+                {/* Inner PWA Window Shell */}
+                <div className="bg-[#09090B]/90 backdrop-blur-xl rounded-[27px] h-[680px] flex flex-col justify-between overflow-hidden relative">
                 {/* Top Minimalist Web App / PWA Chrome Bar */}
                 <div>
                   <div className="px-4 py-3 bg-[#0E0E11] border-b border-white/[0.07] flex items-center justify-between gap-3">
@@ -1369,6 +1393,7 @@ export function App() {
                 </div>
               </div>
             </div>
+            </Tilt3DCard>
           </div>
         </div>
       </main>
@@ -1376,17 +1401,19 @@ export function App() {
       {/* SECTION 02: USER-FRIENDLY APPEAL */}
       <section
         id="features"
-        className="border-t border-white/[0.08] py-24 max-w-[1340px] mx-auto px-6 sm:px-10"
+        className="relative z-10 border-t border-white/[0.08] py-24 max-w-[1340px] mx-auto px-6 sm:px-10"
       >
-        <div className="max-w-2xl mb-16">
-          <div className="font-mono text-[11px] tracking-[0.22em] text-neutral-500 uppercase mb-4">
-            02. BUILT FOR SPEED & SIMPLICITY
+        <Reveal3D>
+          <div className="max-w-2xl mb-16">
+            <div className="font-mono text-[11px] tracking-[0.22em] text-neutral-500 uppercase mb-4">
+              02. BUILT FOR SPEED & SIMPLICITY
+            </div>
+            <h2 className="font-serif-editorial text-4xl sm:text-5xl text-white font-normal leading-tight">
+              So intuitive your team will{' '}
+              <span className="italic text-neutral-400">actually enjoy</span> using it.
+            </h2>
           </div>
-          <h2 className="font-serif-editorial text-4xl sm:text-5xl text-white font-normal leading-tight">
-            So intuitive your team will{' '}
-            <span className="italic text-neutral-400">actually enjoy</span> using it.
-          </h2>
-        </div>
+        </Reveal3D>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[
@@ -1410,19 +1437,22 @@ export function App() {
               title: 'Automatic Shift Reports',
               desc: 'Stop typing up end-of-shift inventory logs by hand. Export clean, ready-to-share PDF handoff reports in one tap.',
             },
-          ].map((item) => (
-            <div
-              key={item.num}
-              className="bg-[#0B0B0D] border border-white/[0.08] rounded-2xl p-7 flex flex-col justify-between min-h-[240px]"
-            >
-              <span className="font-mono text-xs text-neutral-500">{item.num}</span>
-              <div>
-                <h3 className="font-mono text-sm font-semibold tracking-wider uppercase text-white mb-2.5">
-                  {item.title}
-                </h3>
-                <p className="text-sm text-neutral-400 leading-relaxed font-light">{item.desc}</p>
-              </div>
-            </div>
+          ].map((item, idx) => (
+            <Reveal3D key={item.num} delayMs={idx * 75} className="h-full">
+              <Tilt3DCard maxTilt={7} className="h-full rounded-2xl">
+                <div className="h-full bg-[#0B0B0D]/80 backdrop-blur-md border border-white/[0.1] hover:border-white/25 transition-colors rounded-2xl p-7 flex flex-col justify-between min-h-[240px]">
+                  <span className="font-mono text-xs text-neutral-500">{item.num}</span>
+                  <div>
+                    <h3 className="font-mono text-sm font-semibold tracking-wider uppercase text-white mb-2.5">
+                      {item.title}
+                    </h3>
+                    <p className="text-sm text-neutral-400 leading-relaxed font-light">
+                      {item.desc}
+                    </p>
+                  </div>
+                </div>
+              </Tilt3DCard>
+            </Reveal3D>
           ))}
         </div>
       </section>
@@ -1430,119 +1460,123 @@ export function App() {
       {/* SECTION 03: INDUSTRIES DROPDOWN & SECTOR BENEFITS (DEFENSE, LAW ENFORCEMENT, AVIATION) */}
       <section
         id="industries"
-        className="border-t border-white/[0.08] py-24 max-w-[1340px] mx-auto px-6 sm:px-10"
+        className="relative z-10 border-t border-white/[0.08] py-24 max-w-[1340px] mx-auto px-6 sm:px-10"
       >
         {/* Top Row: Section Label + Interactive Industry Dropdown Selector */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-14">
-          <div className="max-w-2xl">
-            <div className="font-mono text-[11px] tracking-[0.22em] text-neutral-500 uppercase mb-4">
-              03. SECTORS WE SERVE — {currentProfile.name.toUpperCase()}
+        <Reveal3D>
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 mb-14">
+            <div className="max-w-2xl">
+              <div className="font-mono text-[11px] tracking-[0.22em] text-neutral-500 uppercase mb-4">
+                03. SECTORS WE SERVE — {currentProfile.name.toUpperCase()}
+              </div>
+              <h2 className="font-serif-editorial text-4xl sm:text-5xl lg:text-[56px] text-white font-normal leading-[1.08]">
+                {currentProfile.headline}{' '}
+                <span className="italic text-neutral-400">{currentProfile.headlineItalic}</span>
+              </h2>
+              <p className="mt-5 text-neutral-400 text-base sm:text-lg leading-relaxed font-light">
+                {currentProfile.summary}
+              </p>
             </div>
-            <h2 className="font-serif-editorial text-4xl sm:text-5xl lg:text-[56px] text-white font-normal leading-[1.08]">
-              {currentProfile.headline}{' '}
-              <span className="italic text-neutral-400">{currentProfile.headlineItalic}</span>
-            </h2>
-            <p className="mt-5 text-neutral-400 text-base sm:text-lg leading-relaxed font-light">
-              {currentProfile.summary}
-            </p>
-          </div>
 
-          {/* Interactive Sector Dropdown Control */}
-          <div className="relative shrink-0" ref={sectionDropdownRef}>
-            <div className="font-mono text-[10px] tracking-[0.2em] text-neutral-500 uppercase mb-2">
-              CHOOSE INDUSTRY SECTOR:
-            </div>
-            <button
-              onClick={() => setSectionDropdownOpen((prev) => !prev)}
-              className="w-full sm:w-72 bg-white text-black rounded-2xl px-5 py-4 font-mono text-xs font-bold tracking-[0.16em] uppercase flex items-center justify-between gap-4 cursor-pointer shadow-[0_0_30px_rgba(255,255,255,0.12)]"
-            >
-              <span className="flex items-center gap-2.5">
-                {getIndustryIcon(selectedIndustry)}
-                <span>{currentProfile.name}</span>
-              </span>
-              <ChevronDown
-                className={`w-4 h-4 transition-transform ${
-                  sectionDropdownOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
+            {/* Interactive Sector Dropdown Control */}
+            <div className="relative shrink-0" ref={sectionDropdownRef}>
+              <div className="font-mono text-[10px] tracking-[0.2em] text-neutral-500 uppercase mb-2">
+                CHOOSE INDUSTRY SECTOR:
+              </div>
+              <button
+                onClick={() => setSectionDropdownOpen((prev) => !prev)}
+                className="w-full sm:w-72 bg-white text-black rounded-2xl px-5 py-4 font-mono text-xs font-bold tracking-[0.16em] uppercase flex items-center justify-between gap-4 cursor-pointer shadow-[0_0_30px_rgba(255,255,255,0.12)]"
+              >
+                <span className="flex items-center gap-2.5">
+                  {getIndustryIcon(selectedIndustry)}
+                  <span>{currentProfile.name}</span>
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform ${
+                    sectionDropdownOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
 
-            {sectionDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-full sm:w-80 rounded-2xl bg-[#0C0C0E] border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2 z-30">
-                {(Object.keys(INDUSTRIES) as IndustryId[]).map((id, idx) => {
-                  const ind = INDUSTRIES[id];
-                  const active = selectedIndustry === id;
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => handleSelectIndustry(id, false)}
-                      className={`w-full text-left px-4 py-3.5 rounded-xl transition-all flex items-start justify-between gap-3 cursor-pointer mt-1 first:mt-0 ${
-                        active ? 'bg-white text-black' : 'text-white hover:bg-white/[0.06]'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className={`mt-0.5 ${active ? 'text-black' : 'text-neutral-400'}`}>
-                          {getIndustryIcon(id)}
-                        </span>
-                        <div>
-                          <div className="font-mono text-xs font-bold tracking-wider uppercase">
-                            0{idx + 1}. {ind.name}
-                          </div>
-                          <div
-                            className={`text-xs mt-0.5 ${
-                              active ? 'text-neutral-700' : 'text-neutral-400'
-                            }`}
-                          >
-                            {ind.shortTag}
+              {sectionDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-full sm:w-80 rounded-2xl bg-[#0C0C0E]/95 backdrop-blur-xl border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2 z-30">
+                  {(Object.keys(INDUSTRIES) as IndustryId[]).map((id, idx) => {
+                    const ind = INDUSTRIES[id];
+                    const active = selectedIndustry === id;
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => handleSelectIndustry(id, false)}
+                        className={`w-full text-left px-4 py-3.5 rounded-xl transition-all flex items-start justify-between gap-3 cursor-pointer mt-1 first:mt-0 ${
+                          active ? 'bg-white text-black' : 'text-white hover:bg-white/[0.06]'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className={`mt-0.5 ${active ? 'text-black' : 'text-neutral-400'}`}>
+                            {getIndustryIcon(id)}
+                          </span>
+                          <div>
+                            <div className="font-mono text-xs font-bold tracking-wider uppercase">
+                              0{idx + 1}. {ind.name}
+                            </div>
+                            <div
+                              className={`text-xs mt-0.5 ${
+                                active ? 'text-neutral-700' : 'text-neutral-400'
+                              }`}
+                            >
+                              {ind.shortTag}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      {active && <Check className="w-4 h-4 shrink-0 mt-0.5" />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                        {active && <Check className="w-4 h-4 shrink-0 mt-0.5" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </Reveal3D>
 
         {/* 4 Tailored Benefits Cards for the Selected Sector */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-          {currentProfile.benefits.map((benefit) => (
-            <div
-              key={benefit.num}
-              className="bg-[#0B0B0D] border border-white/[0.09] rounded-2xl p-7 flex flex-col justify-between min-h-[240px]"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs text-neutral-500">{benefit.num}</span>
-                <span className="font-mono text-[10px] tracking-widest uppercase text-neutral-500">
-                  {currentProfile.name}
-                </span>
-              </div>
-              <div className="mt-6">
-                <h3 className="font-mono text-sm font-semibold tracking-wider uppercase text-white mb-2.5">
-                  {benefit.title}
-                </h3>
-                <p className="text-sm text-neutral-400 leading-relaxed font-light">
-                  {benefit.desc}
-                </p>
-              </div>
-            </div>
+          {currentProfile.benefits.map((benefit, idx) => (
+            <Reveal3D key={benefit.num} delayMs={idx * 75} className="h-full">
+              <Tilt3DCard maxTilt={7} className="h-full rounded-2xl">
+                <div className="h-full bg-[#0B0B0D]/80 backdrop-blur-md border border-white/[0.1] hover:border-white/25 transition-colors rounded-2xl p-7 flex flex-col justify-between min-h-[240px]">
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-xs text-neutral-500">{benefit.num}</span>
+                    <span className="font-mono text-[10px] tracking-widest uppercase text-neutral-500">
+                      {currentProfile.name}
+                    </span>
+                  </div>
+                  <div className="mt-6">
+                    <h3 className="font-mono text-sm font-semibold tracking-wider uppercase text-white mb-2.5">
+                      {benefit.title}
+                    </h3>
+                    <p className="text-sm text-neutral-400 leading-relaxed font-light">
+                      {benefit.desc}
+                    </p>
+                  </div>
+                </div>
+              </Tilt3DCard>
+            </Reveal3D>
           ))}
         </div>
 
-        {/* Sector Impact Strip + Button to test in phone preview */}
+        {/* Sector Impact Strip */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {currentProfile.metrics.map((m) => (
-            <div
-              key={m.label}
-              className="bg-[#0B0B0D] border border-white/[0.07] rounded-2xl p-5"
-            >
-              <div className="font-mono text-[10px] tracking-[0.18em] text-neutral-500 uppercase">
-                {m.label}
-              </div>
-              <div className="font-mono text-sm text-white mt-2 font-medium">{m.value}</div>
-            </div>
+          {currentProfile.metrics.map((m, idx) => (
+            <Reveal3D key={m.label} delayMs={idx * 60}>
+              <Tilt3DCard maxTilt={6} className="rounded-2xl">
+                <div className="bg-[#0B0B0D]/80 backdrop-blur-md border border-white/[0.08] rounded-2xl p-5">
+                  <div className="font-mono text-[10px] tracking-[0.18em] text-neutral-500 uppercase">
+                    {m.label}
+                  </div>
+                  <div className="font-mono text-sm text-white mt-2 font-medium">{m.value}</div>
+                </div>
+              </Tilt3DCard>
+            </Reveal3D>
           ))}
         </div>
       </section>
@@ -1550,10 +1584,10 @@ export function App() {
       {/* SECTION 04: EVERYDAY WORKFLOW */}
       <section
         id="workflow"
-        className="border-t border-white/[0.08] py-24 max-w-[1340px] mx-auto px-6 sm:px-10"
+        className="relative z-10 border-t border-white/[0.08] py-24 max-w-[1340px] mx-auto px-6 sm:px-10"
       >
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-          <div className="lg:col-span-6 space-y-6">
+          <Reveal3D className="lg:col-span-6 space-y-6">
             <div className="font-mono text-[11px] tracking-[0.22em] text-neutral-500 uppercase">
               04. GOODBYE CLIPBOARDS & SPREADSHEETS
             </div>
@@ -1566,7 +1600,7 @@ export function App() {
               armory, or checking out calibrated tools on the flight line, GovRoute gets your people
               out of the supply room and back to the mission.
             </p>
-          </div>
+          </Reveal3D>
 
           <div className="lg:col-span-6 grid grid-cols-2 gap-4">
             {[
@@ -1574,16 +1608,19 @@ export function App() {
               { label: 'HARDWARE NEEDED', value: 'Any Browser · Installable PWA' },
               { label: 'CHECK-OUT SPEED', value: 'Under 2 Seconds per Item' },
               { label: 'OFFLINE SUPPORT', value: 'Works Offline via PWA Cache' },
-            ].map((spec) => (
-              <div
-                key={spec.label}
-                className="bg-[#0B0B0D] border border-white/[0.08] rounded-2xl p-6"
-              >
-                <div className="font-mono text-[10px] tracking-[0.18em] text-neutral-500 uppercase">
-                  {spec.label}
-                </div>
-                <div className="font-mono text-sm text-white mt-2 font-medium">{spec.value}</div>
-              </div>
+            ].map((spec, idx) => (
+              <Reveal3D key={spec.label} delayMs={idx * 70}>
+                <Tilt3DCard maxTilt={7} className="rounded-2xl h-full">
+                  <div className="h-full bg-[#0B0B0D]/80 backdrop-blur-md border border-white/[0.09] hover:border-white/25 transition-colors rounded-2xl p-6">
+                    <div className="font-mono text-[10px] tracking-[0.18em] text-neutral-500 uppercase">
+                      {spec.label}
+                    </div>
+                    <div className="font-mono text-sm text-white mt-2 font-medium">
+                      {spec.value}
+                    </div>
+                  </div>
+                </Tilt3DCard>
+              </Reveal3D>
             ))}
           </div>
         </div>
@@ -1592,7 +1629,7 @@ export function App() {
       )}
 
       {/* MINIMALIST FOOTER */}
-      <footer className="border-t border-white/[0.08] py-12">
+      <footer className="relative z-10 border-t border-white/[0.08] py-12 bg-[#060606]/75 backdrop-blur-md">
         <div className="max-w-[1340px] mx-auto px-6 sm:px-10 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-[11px] tracking-[0.16em] text-neutral-500 uppercase">
           <div>GOVROUTE INC. · DEFENSE · LAW ENFORCEMENT · AVIATION</div>
           <div className="flex items-center gap-6">

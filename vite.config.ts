@@ -79,6 +79,14 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), tailwindcss(), firebaseServerProxyPlugin(env)],
     build: {
       sourcemap: false,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            three: ['three'],
+            supabase: ['@supabase/supabase-js'],
+          },
+        },
+      },
     },
   };
 });

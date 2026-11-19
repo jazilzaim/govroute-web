@@ -23,10 +23,45 @@
   }
 }
 
-/* Subtle architectural grid matching the reference image */
+/* Subtle architectural depth grid */
 .bg-minimal-grid {
   background-size: 64px 64px;
   background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
 }
+
+/* Spatial 3D floating accents for Dora-style depth layers */
+@keyframes float-spatial-slow {
+  0%, 100% {
+    transform: translate3d(0, 0px, 28px);
+  }
+  50% {
+    transform: translate3d(0, -7px, 34px);
+  }
+}
+
+@keyframes float-spatial-alt {
+  0%, 100% {
+    transform: translate3d(0, 0px, 24px);
+  }
+  50% {
+    transform: translate3d(0, 7px, 30px);
+  }
+}
+
+.animate-float-3d {
+  animation: float-spatial-slow 5.5s ease-in-out infinite;
+}
+
+.animate-float-3d-alt {
+  animation: float-spatial-alt 6.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-3d,
+  .animate-float-3d-alt {
+    animation: none;
+  }
+}
+
