@@ -16,8 +16,14 @@ import {
   Plane,
   BadgeCheck,
   X,
+  LogIn,
+  LogOut,
+  LayoutDashboard,
 } from 'lucide-react';
 import { trackEvent, submitWaitlistEntry } from './lib/firebase';
+import { useAuth } from './context/AuthContext';
+import { AuthModal, type AuthModalMode } from './components/AuthModal';
+import { DashboardWorkspace } from './components/DashboardWorkspace';
 
 type ScreenTab = 'HOME' | 'INVENTORY' | 'SCAN' | 'TEAM';
 type IndustryId = 'DEFENSE' | 'LAW_ENFORCEMENT' | 'AVIATION';
@@ -328,11 +334,20 @@ const INDUSTRIES: Record<IndustryId, IndustryProfile> = {
 };
 
 export function App() {
+  const { user, loading: authLoading, signOut } = useAuth();
+
   const [selectedIndustry, setSelectedIndustry] = useState<IndustryId>('DEFENSE');
   const [navDropdownOpen, setNavDropdownOpen] = useState(false);
   const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
+  const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
   const navDropdownRef = useRef<HTMLDivElement>(null);
   const sectionDropdownRef = useRef<HTMLDivElement>(null);
+  const accountDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [activeView, setActiveView] = useState<'landing' | 'workspace'>('landing');
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<AuthModalMode>('login');
+  const prevUserIdRef = useRef<string | null>(null);
 
   const [activeScreen, setActiveScreen] = useState<ScreenTab>('HOME');
   const [itemsByIndustry, setItemsByIndustry] = useState<Record<IndustryId, InventoryItem[]>>({
@@ -357,6 +372,40 @@ export function App() {
   const availableCount = items.filter((i) => i.status === 'Available').length;
   const checkedOutCount = items.filter((i) => i.status === 'Checked Out').length;
 
+  const userDisplayName =
+    (user?.user_metadata?.full_name as string | undefined)?.trim() ||
+    user?.email?.split('@')[0] ||
+    '';
+
+  const userInitials = userDisplayName
+    ? userDisplayName
+        .split(/\s+/)
+        .map((part) => part[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : 'OP';
+
+  // Switch cleanly into workspace on login / restored session, and back to landing on sign-out
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    if (currentUserId && prevUserIdRef.current !== currentUserId) {
+      setActiveView('workspace');
+      const metaSector = user?.user_metadata?.sector as string | undefined;
+      if (metaSector === 'Law Enforcement') {
+        setSelectedIndustry('LAW_ENFORCEMENT');
+      } else if (metaSector === 'Aviation') {
+        setSelectedIndustry('AVIATION');
+      } else if (metaSector === 'Defense') {
+        setSelectedIndustry('DEFENSE');
+      }
+    } else if (!currentUserId && prevUserIdRef.current) {
+      setActiveView('landing');
+      setAccountDropdownOpen(false);
+    }
+    prevUserIdRef.current = currentUserId;
+  }, [user]);
+
   // Close dropdowns on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -366,10 +415,26 @@ export function App() {
       if (sectionDropdownRef.current && !sectionDropdownRef.current.contains(e.target as Node)) {
         setSectionDropdownOpen(false);
       }
+      if (accountDropdownRef.current && !accountDropdownRef.current.contains(e.target as Node)) {
+        setAccountDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const openAuthModal = (mode: AuthModalMode = 'login') => {
+    setAuthModalMode(mode);
+    setAuthModalOpen(true);
+    trackEvent('open_auth_modal', { mode });
+  };
+
+  const handleSignOut = async () => {
+    setAccountDropdownOpen(false);
+    await signOut();
+    setActiveView('landing');
+    trackEvent('auth_logout', {});
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -385,7 +450,14 @@ export function App() {
     trackEvent('select_industry', { industry });
     showToast(`Loaded ${INDUSTRIES[industry].name} inventory preset`);
     if (scrollToSection) {
-      document.getElementById('industries')?.scrollIntoView({ behavior: 'smooth' });
+      if (activeView !== 'landing') {
+        setActiveView('landing');
+        setTimeout(() => {
+          document.getElementById('industries')?.scrollIntoView({ behavior: 'smooth' });
+        }, 60);
+      } else {
+        document.getElementById('industries')?.scrollIntoView({ behavior: 'smooth' });
+      }
     }
   };
 
@@ -394,7 +466,8 @@ export function App() {
     trackEvent('select_preview_screen', { screen, industry: selectedIndustry });
   };
 
-  const toggleItemStatus = (id: string) => {
+  const toggleItemStatus = (id: string, holderOverride?: string) => {
+    const holderName = holderOverride || userDisplayName || currentProfile.defaultHolder;
     setItemsByIndustry((prev) => ({
       ...prev,
       [selectedIndustry]: prev[selectedIndustry].map((item) => {
@@ -407,19 +480,34 @@ export function App() {
         });
         showToast(
           nextStatus === 'Checked Out'
-            ? `Checked out ${item.name} to ${currentProfile.defaultHolder}`
+            ? `Checked out ${item.name} to ${holderName}`
             : `Returned ${item.name} to ${currentProfile.returnLocation}`
         );
         return {
           ...item,
           status: nextStatus,
           assignedTo:
-            nextStatus === 'Checked Out'
-              ? currentProfile.defaultHolder
-              : currentProfile.returnLocation,
+            nextStatus === 'Checked Out' ? holderName : currentProfile.returnLocation,
           updatedAgo: 'Just now',
         };
       }),
+    }));
+  };
+
+  const handleAddItem = (
+    industry: IndustryId,
+    newItem: Omit<InventoryItem, 'id' | 'updatedAgo'>
+  ) => {
+    setItemsByIndustry((prev) => ({
+      ...prev,
+      [industry]: [
+        {
+          ...newItem,
+          id: `${industry.toLowerCase()}-${Date.now()}`,
+          updatedAgo: 'Just now',
+        },
+        ...prev[industry],
+      ],
     }));
   };
 
@@ -462,7 +550,16 @@ export function App() {
       <header className="border-b border-white/[0.08] bg-[#060606]/90 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-[1340px] mx-auto px-6 sm:px-10 h-20 flex items-center justify-between">
           {/* Left Brand */}
-          <a href="#" className="flex items-center gap-3.5">
+          <a
+            href="#preview"
+            onClick={(e) => {
+              if (activeView === 'workspace') {
+                e.preventDefault();
+                setActiveView('landing');
+              }
+            }}
+            className="flex items-center gap-3.5"
+          >
             <div className="w-10 h-10 rounded-xl bg-white text-black flex items-center justify-center shrink-0">
               <div className="w-7 h-7 border-[1.75px] border-black rounded-md flex items-center justify-center font-mono font-bold text-xs tracking-tighter">
                 GR
@@ -479,13 +576,21 @@ export function App() {
           </a>
 
           {/* Center Numbered Links + Industries Dropdown */}
-          <nav className="hidden lg:flex items-center gap-11 font-mono text-[11px] tracking-[0.18em] text-neutral-400 uppercase">
-            <a href="#preview" className="hover:text-white transition-colors leading-relaxed">
+          <nav className="hidden xl:flex items-center gap-9 font-mono text-[11px] tracking-[0.18em] text-neutral-400 uppercase">
+            <a
+              href="#preview"
+              onClick={() => setActiveView('landing')}
+              className="hover:text-white transition-colors leading-relaxed"
+            >
               <span className="block text-neutral-500">01. THE</span>
               <span>APP</span>
             </a>
 
-            <a href="#features" className="hover:text-white transition-colors leading-relaxed">
+            <a
+              href="#features"
+              onClick={() => setActiveView('landing')}
+              className="hover:text-white transition-colors leading-relaxed"
+            >
               <span className="block text-neutral-500">02. BUILT FOR</span>
               <span>SPEED</span>
             </a>
@@ -554,7 +659,11 @@ export function App() {
               )}
             </div>
 
-            <a href="#workflow" className="hover:text-white transition-colors leading-relaxed">
+            <a
+              href="#workflow"
+              onClick={() => setActiveView('landing')}
+              className="hover:text-white transition-colors leading-relaxed"
+            >
               <span className="block text-neutral-500">04. HOW IT</span>
               <span>WORKS</span>
             </a>
@@ -572,25 +681,134 @@ export function App() {
             </button>
           </nav>
 
-          {/* Right White Pill CTA */}
-          <button
-            onClick={() => {
-              setWaitlistSubmitted(false);
-              setWaitlistOpen(true);
-              trackEvent('open_waitlist_modal', { location: 'navbar_cta' });
-            }}
-            className="bg-white hover:bg-neutral-200 text-black rounded-xl px-6 py-3 font-mono text-[11px] font-semibold tracking-[0.18em] uppercase flex items-center gap-3 transition-colors cursor-pointer"
-          >
-            <span className="text-center leading-tight">
-              JOIN
-              <br />
-              WAITLIST
-            </span>
-            <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.2]" />
-          </button>
+          {/* Right Auth & CTA Controls */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            {user ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setActiveView((prev) => (prev === 'workspace' ? 'landing' : 'workspace'))
+                  }
+                  className={`rounded-xl px-4 py-2.5 font-mono text-[11px] font-semibold tracking-[0.14em] uppercase flex items-center gap-2 transition-colors cursor-pointer border ${
+                    activeView === 'workspace'
+                      ? 'bg-white text-black border-white'
+                      : 'bg-[#0C0C0E] text-white border-white/15 hover:border-white/35'
+                  }`}
+                >
+                  <LayoutDashboard className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">
+                    {activeView === 'workspace' ? 'Overview' : 'Workspace'}
+                  </span>
+                </button>
+
+                <div className="relative" ref={accountDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setAccountDropdownOpen((prev) => !prev)}
+                    className="rounded-xl border border-white/15 bg-[#0C0C0E] hover:border-white/35 pl-2.5 pr-3 py-2 flex items-center gap-2.5 transition-colors cursor-pointer"
+                  >
+                    <div className="w-7 h-7 rounded-lg bg-white text-black font-mono text-[11px] font-bold flex items-center justify-center">
+                      {userInitials}
+                    </div>
+                    <div className="hidden sm:block text-left max-w-[140px]">
+                      <div className="text-xs font-medium text-white truncate leading-tight">
+                        {userDisplayName}
+                      </div>
+                      <div className="font-mono text-[9px] text-neutral-500 uppercase tracking-wider truncate">
+                        Signed In
+                      </div>
+                    </div>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 text-neutral-400 transition-transform ${
+                        accountDropdownOpen ? 'rotate-180 text-white' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {accountDropdownOpen && (
+                    <div className="absolute right-0 mt-3 w-64 rounded-2xl bg-[#0C0C0E] border border-white/15 shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-2 z-50">
+                      <div className="px-3 py-2.5 border-b border-white/[0.06]">
+                        <div className="text-xs font-medium text-white truncate">
+                          {userDisplayName}
+                        </div>
+                        <div className="text-[11px] text-neutral-500 truncate mt-0.5">
+                          {user.email}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveView('workspace');
+                          setAccountDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl text-xs text-neutral-200 hover:bg-white/[0.06] hover:text-white flex items-center gap-2.5 mt-1 cursor-pointer transition-colors"
+                      >
+                        <LayoutDashboard className="w-3.5 h-3.5 text-neutral-400" />
+                        <span>Open Inventory Workspace</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSignOut}
+                        className="w-full text-left px-3 py-2.5 rounded-xl text-xs text-neutral-300 hover:bg-white/[0.06] hover:text-white flex items-center gap-2.5 cursor-pointer transition-colors"
+                      >
+                        <LogOut className="w-3.5 h-3.5 text-neutral-400" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  disabled={authLoading}
+                  onClick={() => openAuthModal('login')}
+                  className="rounded-xl border border-white/15 bg-[#0C0C0E] hover:border-white/35 hover:text-white text-neutral-200 px-4 sm:px-5 py-3 font-mono text-[11px] font-semibold tracking-[0.16em] uppercase flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Log In</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWaitlistSubmitted(false);
+                    setWaitlistOpen(true);
+                    trackEvent('open_waitlist_modal', { location: 'navbar_cta' });
+                  }}
+                  className="bg-white hover:bg-neutral-200 text-black rounded-xl px-4 sm:px-5 py-2.5 font-mono text-[11px] font-semibold tracking-[0.16em] uppercase flex items-center gap-2.5 transition-colors cursor-pointer"
+                >
+                  <span className="text-center leading-tight">
+                    JOIN
+                    <br />
+                    WAITLIST
+                  </span>
+                  <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.2]" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
+      {user && activeView === 'workspace' ? (
+        <DashboardWorkspace
+          user={user}
+          selectedIndustry={selectedIndustry}
+          industries={INDUSTRIES}
+          itemsByIndustry={itemsByIndustry}
+          onSelectIndustry={(industry) => handleSelectIndustry(industry, false)}
+          onToggleItemStatus={(itemId, actorName) => toggleItemStatus(itemId, actorName)}
+          onAddItem={handleAddItem}
+          onBackToOverview={() => setActiveView('landing')}
+          onSignOut={handleSignOut}
+        />
+      ) : (
+        <>
       {/* HERO SECTION */}
       <main id="preview" className="max-w-[1340px] mx-auto px-6 sm:px-10 pt-14 pb-24 lg:pt-20">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-start">
@@ -964,7 +1182,7 @@ export function App() {
                         <div className="flex justify-between text-neutral-400">
                           <span>Logged-In User</span>
                           <span className="text-white font-medium">
-                            {currentProfile.defaultHolder}
+                            {userDisplayName || currentProfile.defaultHolder}
                           </span>
                         </div>
                         <div className="flex justify-between text-neutral-400">
@@ -1310,12 +1528,31 @@ export function App() {
           </div>
         </div>
       </section>
+        </>
+      )}
 
       {/* MINIMALIST FOOTER */}
       <footer className="border-t border-white/[0.08] py-12">
         <div className="max-w-[1340px] mx-auto px-6 sm:px-10 flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-[11px] tracking-[0.16em] text-neutral-500 uppercase">
           <div>GOVROUTE INC. · DEFENSE · LAW ENFORCEMENT · AVIATION</div>
           <div className="flex items-center gap-6">
+            {user ? (
+              <button
+                type="button"
+                onClick={() => setActiveView('workspace')}
+                className="hover:text-white transition-colors uppercase cursor-pointer"
+              >
+                OPEN WORKSPACE ↗
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => openAuthModal('login')}
+                className="hover:text-white transition-colors uppercase cursor-pointer"
+              >
+                OPERATOR LOGIN
+              </button>
+            )}
             <button
               onClick={() => {
                 setWaitlistSubmitted(false);
@@ -1329,6 +1566,18 @@ export function App() {
           </div>
         </div>
       </footer>
+
+      {/* SUPABASE AUTH MODAL (LOGIN & SIGN UP) */}
+      <AuthModal
+        open={authModalOpen}
+        initialMode={authModalMode}
+        defaultSector={currentProfile.name}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthenticated={() => {
+          setAuthModalOpen(false);
+          setActiveView('workspace');
+        }}
+      />
 
       {/* CLEAN MINIMALIST WAITLIST MODAL */}
       {waitlistOpen && (
