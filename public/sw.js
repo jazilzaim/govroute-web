@@ -1,4 +1,4 @@
-const CACHE_NAME = 'govroute-pwa-v2';
+const CACHE_NAME = 'govroute-pwa-v3';
 const APP_SHELL_ASSETS = [
   '/',
   '/index.html',

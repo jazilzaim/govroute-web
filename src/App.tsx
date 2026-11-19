@@ -17,12 +17,11 @@ import {
   Shield,
   Plane,
   BadgeCheck,
-  X,
   LogIn,
   LogOut,
   LayoutDashboard,
 } from 'lucide-react';
-import { trackEvent, submitWaitlistEntry } from './lib/firebase';
+import { trackEvent } from './lib/firebase';
 import { useAuth } from './context/AuthContext';
 import { AuthModal, type AuthModalMode } from './components/AuthModal';
 import { DashboardWorkspace } from './components/DashboardWorkspace';
@@ -367,11 +366,6 @@ export function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [autoReminders, setAutoReminders] = useState(true);
   const [offlineSync, setOfflineSync] = useState(true);
-  const [waitlistOpen, setWaitlistOpen] = useState(false);
-  const [waitlistSubmitting, setWaitlistSubmitting] = useState(false);
-  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
-  const [waitlistEmail, setWaitlistEmail] = useState('');
-  const [waitlistOrg, setWaitlistOrg] = useState('Defense');
 
   const currentProfile = INDUSTRIES[selectedIndustry];
   const items = itemsByIndustry[selectedIndustry];
@@ -459,7 +453,6 @@ export function App() {
 
   const handleSelectIndustry = (industry: IndustryId, scrollToSection = false) => {
     setSelectedIndustry(industry);
-    setWaitlistOrg(INDUSTRIES[industry].name);
     setSelectedItemId(null);
     setNavDropdownOpen(false);
     setSectionDropdownOpen(false);
@@ -531,15 +524,6 @@ export function App() {
     const target = items.find((i) => i.status === 'Available') || items[0];
     trackEvent('demo_camera_scan', { industry: selectedIndustry, item_name: target.name });
     toggleItemStatus(target.id);
-  };
-
-  const handleWaitlistSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!waitlistEmail || waitlistSubmitting) return;
-    setWaitlistSubmitting(true);
-    await submitWaitlistEntry(waitlistEmail, waitlistOrg);
-    setWaitlistSubmitting(false);
-    setWaitlistSubmitted(true);
   };
 
   const filteredPhoneItems = items.filter(
@@ -685,15 +669,11 @@ export function App() {
             </a>
 
             <button
-              onClick={() => {
-                setWaitlistSubmitted(false);
-                setWaitlistOpen(true);
-                trackEvent('open_waitlist_modal', { location: 'navbar_contact' });
-              }}
+              onClick={() => (user ? setActiveView('workspace') : openAuthModal('signup'))}
               className="hover:text-white transition-colors leading-relaxed text-left uppercase cursor-pointer"
             >
-              <span className="block text-neutral-500">05. CONTACT</span>
-              <span>US</span>
+              <span className="block text-neutral-500">05. GET</span>
+              <span>STARTED</span>
             </button>
           </nav>
 
@@ -791,18 +771,11 @@ export function App() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setWaitlistSubmitted(false);
-                    setWaitlistOpen(true);
-                    trackEvent('open_waitlist_modal', { location: 'navbar_cta' });
-                  }}
-                  className="bg-white hover:bg-neutral-200 text-black rounded-xl px-4 sm:px-5 py-2.5 font-mono text-[11px] font-semibold tracking-[0.16em] uppercase flex items-center gap-2.5 transition-colors cursor-pointer"
+                  disabled={authLoading}
+                  onClick={() => openAuthModal('signup')}
+                  className="bg-white hover:bg-neutral-200 text-black rounded-xl px-5 py-3 font-mono text-[11px] font-semibold tracking-[0.16em] uppercase flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  <span className="text-center leading-tight">
-                    JOIN
-                    <br />
-                    WAITLIST
-                  </span>
+                  <span>Sign Up</span>
                   <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.2]" />
                 </button>
               </>
@@ -1642,24 +1615,23 @@ export function App() {
                 OPEN WORKSPACE ↗
               </button>
             ) : (
-              <button
-                type="button"
-                onClick={() => openAuthModal('login')}
-                className="hover:text-white transition-colors uppercase cursor-pointer"
-              >
-                OPERATOR LOGIN
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => openAuthModal('login')}
+                  className="hover:text-white transition-colors uppercase cursor-pointer"
+                >
+                  LOG IN
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAuthModal('signup')}
+                  className="text-white hover:text-neutral-300 transition-colors uppercase cursor-pointer"
+                >
+                  SIGN UP ↗
+                </button>
+              </>
             )}
-            <button
-              onClick={() => {
-                setWaitlistSubmitted(false);
-                setWaitlistOpen(true);
-                trackEvent('open_waitlist_modal', { location: 'footer_cta' });
-              }}
-              className="hover:text-white transition-colors uppercase cursor-pointer"
-            >
-              JOIN WAITLIST ↗
-            </button>
           </div>
         </div>
       </footer>
@@ -1675,93 +1647,6 @@ export function App() {
           setActiveView('workspace');
         }}
       />
-
-      {/* CLEAN MINIMALIST WAITLIST MODAL */}
-      {waitlistOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0C0C0E] border border-white/15 rounded-3xl max-w-md w-full p-8 relative">
-            <button
-              onClick={() => setWaitlistOpen(false)}
-              className="absolute top-6 right-6 text-neutral-500 hover:text-white cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {waitlistSubmitted ? (
-              <div className="py-6 text-center space-y-4">
-                <div className="w-10 h-10 rounded-full bg-white text-black mx-auto flex items-center justify-center">
-                  <Check className="w-5 h-5" />
-                </div>
-                <h3 className="font-serif-editorial text-3xl text-white">You’re on the list</h3>
-                <p className="text-sm text-neutral-400 font-light">
-                  We have registered <span className="text-white">{waitlistEmail}</span> (
-                  {waitlistOrg}) for early access.
-                </p>
-                <button
-                  onClick={() => setWaitlistOpen(false)}
-                  className="mt-2 w-full py-3 rounded-xl bg-white text-black font-mono text-xs font-semibold uppercase tracking-widest cursor-pointer"
-                >
-                  Done
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleWaitlistSubmit} className="space-y-5">
-                <div className="font-mono text-[10px] tracking-[0.2em] text-neutral-500 uppercase">
-                  EARLY ACCESS
-                </div>
-                <h3 className="font-serif-editorial text-3xl text-white font-normal">
-                  Join the GovRoute Waitlist
-                </h3>
-                <p className="text-xs text-neutral-400 font-light leading-relaxed">
-                  Get early access for your Defense unit, Law Enforcement department, or Aviation
-                  operation. Setup takes less than 5 minutes.
-                </p>
-
-                <div>
-                  <label className="block font-mono text-[10px] tracking-widest uppercase text-neutral-400 mb-2">
-                    INDUSTRY SECTOR
-                  </label>
-                  <select
-                    value={waitlistOrg}
-                    onChange={(e) => setWaitlistOrg(e.target.value)}
-                    className="w-full bg-[#141417] border border-white/10 rounded-xl px-3.5 py-3 text-xs text-white focus:outline-none focus:border-white/30"
-                  >
-                    <option value="Defense">Defense (Military Units, Armories & Base Ops)</option>
-                    <option value="Law Enforcement">
-                      Law Enforcement (Police Precincts, Patrol & SWAT)
-                    </option>
-                    <option value="Aviation">
-                      Aviation (Hangar Tool Cribs, Flight Line & MRO)
-                    </option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-mono text-[10px] tracking-widest uppercase text-neutral-400 mb-2">
-                    WORK EMAIL
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={waitlistEmail}
-                    onChange={(e) => setWaitlistEmail(e.target.value)}
-                    placeholder="you@organization.gov"
-                    className="w-full bg-[#141417] border border-white/10 rounded-xl px-3.5 py-3 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-white/30"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={waitlistSubmitting}
-                  className="w-full py-3.5 rounded-xl bg-white hover:bg-neutral-200 disabled:opacity-50 text-black font-mono text-xs font-semibold tracking-[0.16em] uppercase transition-colors cursor-pointer"
-                >
-                  {waitlistSubmitting ? 'Submitting...' : 'Join Waitlist ↗'}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
